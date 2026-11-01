@@ -15,6 +15,8 @@ import okhttp3.WebSocketListener;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
@@ -22,16 +24,15 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
 /**
- * Native WebSocket bridge that allows direct, secure communication between
- * the mobile Android application and LG webOS Smart TVs on the local Wi-Fi.
+ * Native WebSocket bridge that manages independent, secure WebSocket connections
+ * between the mobile Android application and LG webOS Smart TVs on local Wi-Fi.
  *
- * This completely bypasses mobile browser sandbox limits and self-signed TLS blocks.
+ * Supports concurrent sockets (e.g. SSAP command socket and Pointer input socket).
  */
 public class TvWebSocketBridge {
     private final BridgeActivity activity;
-    private WebSocket webSocket;
-    private OkHttpClient httpClient;
-    private boolean isConnected = false;
+    private final Map<String, WebSocket> sockets = new ConcurrentHashMap<>();
+    private final OkHttpClient httpClient;
 
     public TvWebSocketBridge(BridgeActivity activity) {
         this.activity = activity;
@@ -85,78 +86,101 @@ public class TvWebSocketBridge {
     }
 
     @JavascriptInterface
-    public void connect(String url) {
-        disconnect();
+    public void connect(String socketId, String url) {
+        disconnect(socketId);
 
         try {
             Request request = new Request.Builder()
                 .url(url)
                 .build();
 
-            this.webSocket = httpClient.newWebSocket(request, new WebSocketListener() {
+            WebSocket ws = httpClient.newWebSocket(request, new WebSocketListener() {
                 @Override
                 public void onOpen(@NonNull WebSocket ws, @NonNull Response response) {
-                    isConnected = true;
-                    runOnWeb("window.__onAndroidBridgeOpen && window.__onAndroidBridgeOpen();");
+                    sockets.put(socketId, ws);
+                    runOnWeb("window.__onAndroidBridgeOpen && window.__onAndroidBridgeOpen('" + socketId + "');");
                 }
 
                 @Override
                 public void onMessage(@NonNull WebSocket ws, @NonNull String text) {
                     String safeArg = toSafeJsArg(text);
-                    runOnWeb("window.__onAndroidBridgeMessage && window.__onAndroidBridgeMessage(" + safeArg + ");");
+                    runOnWeb("window.__onAndroidBridgeMessage && window.__onAndroidBridgeMessage('" + socketId + "', " + safeArg + ");");
                 }
 
                 @Override
                 public void onClosing(@NonNull WebSocket ws, int code, @NonNull String reason) {
-                    isConnected = false;
+                    sockets.remove(socketId);
                     String safeArg = toSafeJsArg(reason);
-                    runOnWeb("window.__onAndroidBridgeClose && window.__onAndroidBridgeClose(" + code + ", " + safeArg + ");");
+                    runOnWeb("window.__onAndroidBridgeClose && window.__onAndroidBridgeClose('" + socketId + "', " + code + ", " + safeArg + ");");
                 }
 
                 @Override
                 public void onClosed(@NonNull WebSocket ws, int code, @NonNull String reason) {
-                    isConnected = false;
+                    sockets.remove(socketId);
                     String safeArg = toSafeJsArg(reason);
-                    runOnWeb("window.__onAndroidBridgeClose && window.__onAndroidBridgeClose(" + code + ", " + safeArg + ");");
+                    runOnWeb("window.__onAndroidBridgeClose && window.__onAndroidBridgeClose('" + socketId + "', " + code + ", " + safeArg + ");");
                 }
 
                 @Override
                 public void onFailure(@NonNull WebSocket ws, @NonNull Throwable t, @Nullable Response response) {
-                    isConnected = false;
+                    sockets.remove(socketId);
                     String msg = t.getMessage() != null ? t.getMessage() : "Native socket failure";
                     String safeArg = toSafeJsArg(msg);
-                    runOnWeb("window.__onAndroidBridgeError && window.__onAndroidBridgeError(" + safeArg + ");");
+                    runOnWeb("window.__onAndroidBridgeError && window.__onAndroidBridgeError('" + socketId + "', " + safeArg + ");");
                 }
             });
+            sockets.put(socketId, ws);
         } catch (Exception e) {
-            isConnected = false;
+            sockets.remove(socketId);
             String safeArg = toSafeJsArg(e.getMessage() != null ? e.getMessage() : "Failed to open socket");
-            runOnWeb("window.__onAndroidBridgeError && window.__onAndroidBridgeError(" + safeArg + ");");
+            runOnWeb("window.__onAndroidBridgeError && window.__onAndroidBridgeError('" + socketId + "', " + safeArg + ");");
         }
     }
 
     @JavascriptInterface
-    public boolean send(String message) {
-        if (webSocket != null && isConnected) {
-            return webSocket.send(message);
+    public void connect(String url) {
+        connect("default", url);
+    }
+
+    @JavascriptInterface
+    public boolean send(String socketId, String message) {
+        WebSocket ws = sockets.get(socketId);
+        if (ws != null) {
+            return ws.send(message);
         }
         return false;
     }
 
     @JavascriptInterface
-    public void disconnect() {
-        isConnected = false;
-        if (webSocket != null) {
+    public boolean send(String message) {
+        return send("default", message);
+    }
+
+    @JavascriptInterface
+    public void disconnect(String socketId) {
+        WebSocket ws = sockets.remove(socketId);
+        if (ws != null) {
             try {
-                webSocket.close(1000, "App closed");
+                ws.close(1000, "App closed");
             } catch (Exception ignored) {}
-            webSocket = null;
         }
     }
 
     @JavascriptInterface
+    public void disconnect() {
+        for (String id : sockets.keySet()) {
+            disconnect(id);
+        }
+    }
+
+    @JavascriptInterface
+    public boolean isConnected(String socketId) {
+        return sockets.containsKey(socketId);
+    }
+
+    @JavascriptInterface
     public boolean isConnected() {
-        return isConnected;
+        return !sockets.isEmpty();
     }
 
     private void runOnWeb(String script) {
