@@ -184,17 +184,22 @@ export const ManualIpEntry: React.FC<ManualIpEntryProps> = ({ onSuccess, onPairi
       }
     }
 
+    const savedProfiles = TVProfileStorage.getProfiles();
+    const existing = savedProfiles.find((p) => p.ip === ipToUse || p.id === `tv-${ipToUse}`);
+    const clientKey = existing?.clientKey;
+
     const profile: TVProfile = {
-      id: `tv-${ipToUse}`,
-      name: nameToUse,
+      id: existing?.id || `tv-${ipToUse}`,
+      name: existing?.name || nameToUse,
       ip: ipToUse,
       port: 3001,
       useSecureWs: true,
-      pairingType: 'PIN',
+      pairingType: clientKey ? 'PROMPT' : 'PIN',
+      clientKey: clientKey || undefined,
     };
 
     try {
-      const res = await connectTV(profile, 'PIN');
+      const res = await connectTV(profile, clientKey ? 'PROMPT' : 'PIN');
       if (res.success) {
         onSuccess?.();
       } else if (res.requiresPin || res.requiresPrompt) {

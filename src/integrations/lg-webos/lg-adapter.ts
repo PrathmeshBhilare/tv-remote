@@ -117,7 +117,8 @@ export class LGWebOSTVAdapter implements ITVAdapter {
     };
 
     const port = this.currentProfile.port || 3001;
-    const pairingMode = preferredPairingType || profile.pairingType || 'PIN';
+    // When a saved clientKey is present, use 'PROMPT' so webOS re-authenticates silently without popping an 8-digit PIN
+    const pairingMode = profile.clientKey ? 'PROMPT' : (preferredPairingType || profile.pairingType || 'PIN');
     const bridgeUrl = getEffectiveBridgeUrl();
 
     // 1. If running with a local bridge (localhost or configured bridge service) without custom mock transport and NOT in native Android shell:

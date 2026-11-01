@@ -1,5 +1,7 @@
 package com.lgcontrol.remote;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
@@ -27,9 +29,12 @@ import javax.net.ssl.X509TrustManager;
  * Native WebSocket bridge that manages independent, secure WebSocket connections
  * between the mobile Android application and LG webOS Smart TVs on local Wi-Fi.
  *
- * Supports concurrent sockets (e.g. SSAP command socket and Pointer input socket).
+ * Supports concurrent sockets (e.g. SSAP command socket and Pointer input socket)
+ * and provides persistent native Android SharedPreferences storage so pairing
+ * credentials are never lost when the app closes.
  */
 public class TvWebSocketBridge {
+    private static final String PREFS_NAME = "lg_control_native_prefs";
     private final BridgeActivity activity;
     private final Map<String, WebSocket> sockets = new ConcurrentHashMap<>();
     private final OkHttpClient httpClient;
@@ -181,6 +186,34 @@ public class TvWebSocketBridge {
     @JavascriptInterface
     public boolean isConnected() {
         return !sockets.isEmpty();
+    }
+
+    // --- Synchronous Native Android SharedPreferences Storage ---
+
+    @JavascriptInterface
+    public void setStorageItem(String key, String value) {
+        try {
+            SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            prefs.edit().putString(key, value).commit();
+        } catch (Exception ignored) {}
+    }
+
+    @JavascriptInterface
+    public String getStorageItem(String key) {
+        try {
+            SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            return prefs.getString(key, null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @JavascriptInterface
+    public void removeStorageItem(String key) {
+        try {
+            SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            prefs.edit().remove(key).commit();
+        } catch (Exception ignored) {}
     }
 
     private void runOnWeb(String script) {

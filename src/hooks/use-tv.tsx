@@ -168,6 +168,11 @@ export function TVProvider({ children }: { children: React.ReactNode }) {
     return testSummary;
   }, [showFeedback]);
 
+  const connectionStateRef = useRef(connectionState);
+  useEffect(() => {
+    connectionStateRef.current = connectionState;
+  }, [connectionState]);
+
   // Initialize active adapter on mount
   useEffect(() => {
     if (!adapterRef.current) {
@@ -178,11 +183,13 @@ export function TVProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
+    TVProfileStorage.initCache();
     const saved = TVProfileStorage.getActiveProfile();
     if (saved) {
       setCurrentProfile(saved);
       if (adapterRef.current) {
-        adapterRef.current.connect(saved).then((res) => {
+        // Use 'PROMPT' with existing clientKey so the TV connects silently without showing PIN
+        adapterRef.current.connect(saved, saved.clientKey ? 'PROMPT' : 'PIN').then((res) => {
           if (res.success) {
             if (res.clientKey && res.clientKey !== saved.clientKey) {
               const updated = { ...saved, clientKey: res.clientKey };
@@ -202,14 +209,64 @@ export function TVProvider({ children }: { children: React.ReactNode }) {
     }
   }, [showFeedback, refreshTVStatus]);
 
+  // Auto-reconnect when app is reopened or brought back to the foreground
+  useEffect(() => {
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const handleResume = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+
+      const active = TVProfileStorage.getActiveProfile();
+      if (!active || !active.clientKey) return;
+
+      if (connectionStateRef.current !== 'connected' && connectionStateRef.current !== 'connecting') {
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        reconnectTimeout = setTimeout(() => {
+          if (adapterRef.current && connectionStateRef.current !== 'connected') {
+            adapterRef.current.connect(active, 'PROMPT').then((res) => {
+              if (res.success) {
+                refreshTVStatus();
+                showFeedback(`Connected to ${active.name}`);
+              }
+            }).catch(() => {
+              // silent retry on resume
+            });
+          }
+        }, 300);
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleResume);
+    window.addEventListener('focus', handleResume);
+
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      window.removeEventListener('visibilitychange', handleResume);
+      window.removeEventListener('focus', handleResume);
+    };
+  }, [refreshTVStatus, showFeedback]);
+
   const ensureConnectedOrPrompt = useCallback(() => {
     if (connectionState !== 'connected') {
+      const active = TVProfileStorage.getActiveProfile();
+      if (active && active.clientKey) {
+        showFeedback('Reconnecting to TV...', false);
+        if (adapterRef.current && connectionState !== 'connecting') {
+          adapterRef.current.connect(active, 'PROMPT').then((res) => {
+            if (res.success) {
+              refreshTVStatus();
+              showFeedback(`Connected to ${active.name}`);
+            }
+          });
+        }
+        return false;
+      }
       showFeedback('TV Not Connected. Please connect to your LG TV first.', true);
       setConnectModalOpen(true);
       return false;
     }
     return true;
-  }, [connectionState, showFeedback]);
+  }, [connectionState, showFeedback, refreshTVStatus]);
 
   const connectTV = useCallback(
     async (
