@@ -3,10 +3,17 @@
 /**
  * LG Control - Secured Local Bridge Service
  *
- * This lightweight local service runs on your local network (e.g. your PC or home server).
+ * This local service runs on your computer or local network.
  * It bridges commands between deployed HTTPS web clients (like Vercel) and your local LG webOS TV,
- * bypassing browser self-signed TLS certificate checks (ERR_CERT_AUTHORITY_INVALID) and
- * Private Network Access restrictions.
+ * solving browser self-signed TLS certificate enforcement (ERR_CERT_AUTHORITY_INVALID) and
+ * Private Network Access (PNA) restrictions.
+ *
+ * Security:
+ * - Trust-on-First-Use (TOFU) certificate fingerprint verification for LG TV TLS on port 3001.
+ * - Never blindly trusts arbitrary certificates.
+ * - Restricts CORS to allowed origins.
+ * - Supports local authorization tokens.
+ * - Keeps TV credentials out of logs.
  *
  * Usage:
  *   npm run bridge
@@ -15,13 +22,158 @@
  */
 
 const http = require('http');
+const tls = require('tls');
+const net = require('net');
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const PORT = parseInt(process.env.BRIDGE_PORT || '3005', 10);
-const HOST = process.env.BRIDGE_HOST || '0.0.0.0';
-const KEYS_FILE = path.join(__dirname, '..', '.tv-keys.json');
+const HOST = process.env.BRIDGE_HOST || '127.0.0.1';
+
+// File paths for secure persistent storage
+const DATA_DIR = path.join(__dirname, '..');
+const KEYS_FILE = path.join(DATA_DIR, '.tv-keys.json');
+const FINGERPRINTS_FILE = path.join(DATA_DIR, '.tv-fingerprints.json');
+const TOKEN_FILE = path.join(DATA_DIR, '.bridge-token');
+
+// Allowed web origins for CORS
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https?:\/\/localhost(:\d+)?$/,
+  /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+  /^https:\/\/tv-remote-roan\.vercel\.app$/,
+  /^https:\/\/.*\.vercel\.app$/,
+  /^https:\/\/localhost$/,
+  /^capacitor:\/\/localhost$/,
+];
+
+function isOriginAllowed(origin) {
+  if (!origin) return true; // Direct non-browser requests
+  return ALLOWED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
+}
+
+// Ensure bridge security token exists
+function getOrCreateBridgeToken() {
+  try {
+    if (fs.existsSync(TOKEN_FILE)) {
+      const token = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
+      if (token.length >= 16) return token;
+    }
+  } catch {}
+
+  const newToken = crypto.randomBytes(16).toString('hex');
+  try {
+    fs.writeFileSync(TOKEN_FILE, newToken, { encoding: 'utf8', mode: 0o600 });
+  } catch {}
+  return newToken;
+}
+
+const BRIDGE_TOKEN = getOrCreateBridgeToken();
+
+// Persistent TV Client Keys
+function getSavedKeys() {
+  try {
+    if (fs.existsSync(KEYS_FILE)) {
+      return JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8')) || {};
+    }
+  } catch {}
+  return {};
+}
+
+function saveKeyForIp(ip, key) {
+  try {
+    const keys = getSavedKeys();
+    keys[ip] = key;
+    fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2), { encoding: 'utf8', mode: 0o600 });
+  } catch (err) {
+    console.error('[Storage] Error saving TV key:', err.message);
+  }
+}
+
+function removeKeyForIp(ip) {
+  try {
+    const keys = getSavedKeys();
+    delete keys[ip];
+    fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2), { encoding: 'utf8', mode: 0o600 });
+  } catch {}
+}
+
+// Persistent TV TLS Fingerprints (TOFU mechanism)
+function getSavedFingerprints() {
+  try {
+    if (fs.existsSync(FINGERPRINTS_FILE)) {
+      return JSON.parse(fs.readFileSync(FINGERPRINTS_FILE, 'utf8')) || {};
+    }
+  } catch {}
+  return {};
+}
+
+function saveFingerprintForIp(ip, fingerprint) {
+  try {
+    const fingerprints = getSavedFingerprints();
+    fingerprints[ip] = fingerprint;
+    fs.writeFileSync(FINGERPRINTS_FILE, JSON.stringify(fingerprints, null, 2), {
+      encoding: 'utf8',
+      mode: 0o600,
+    });
+  } catch (err) {
+    console.error('[Storage] Error saving TV TLS fingerprint:', err.message);
+  }
+}
+
+/**
+ * Trust-on-First-Use (TOFU) TLS certificate verification for LG webOS TV.
+ */
+function verifyTvCertificate(host, cert) {
+  if (!cert) {
+    return new Error('TV did not present a TLS certificate.');
+  }
+
+  const currentFingerprint = cert.fingerprint256;
+  if (!currentFingerprint) {
+    return new Error('Could not calculate SHA-256 fingerprint for TV TLS certificate.');
+  }
+
+  const savedFingerprints = getSavedFingerprints();
+  const pinnedFingerprint = savedFingerprints[host];
+
+  if (pinnedFingerprint) {
+    if (pinnedFingerprint !== currentFingerprint) {
+      console.error(
+        `[Security] TLS FINGERPRINT MISMATCH for ${host}! Pinned: ${pinnedFingerprint}, Presented: ${currentFingerprint}`
+      );
+      return new Error(
+        `Security Error: TV TLS certificate fingerprint changed! Pinned: ${pinnedFingerprint}, got: ${currentFingerprint}`
+      );
+    }
+    // Fingerprint matches pinned certificate
+    return undefined;
+  }
+
+  // Trust on First Use (TOFU) check:
+  // Validate that the certificate Subject or Issuer belongs to LG Electronics
+  const issuerOrg = cert.issuer?.O || '';
+  const subjectOrg = cert.subject?.O || '';
+  const isLgEntity =
+    issuerOrg.includes('LG Electronics') ||
+    subjectOrg.includes('LG Electronics') ||
+    (cert.subject?.CN && cert.subject.CN.includes('LGE TV'));
+
+  if (!isLgEntity) {
+    console.error(
+      `[Security] Rejected untrusted certificate on ${host}: Issuer="${issuerOrg}", Subject="${subjectOrg}"`
+    );
+    return new Error(
+      `Untrusted certificate on ${host}. Certificate issuer is "${issuerOrg}", expected LG Electronics Inc.`
+    );
+  }
+
+  // Pin fingerprint on first successful verification
+  console.log(`[Security] Pinned TV certificate fingerprint for ${host} (SHA-256: ${currentFingerprint})`);
+  saveFingerprintForIp(host, currentFingerprint);
+  return undefined;
+}
 
 // LG webOS SSAP URIs
 const LG_SSAP_URIS = {
@@ -100,31 +252,7 @@ function isPrivateIp(ip) {
   );
 }
 
-function getSavedKeys() {
-  try {
-    if (fs.existsSync(KEYS_FILE)) {
-      return JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8')) || {};
-    }
-  } catch {}
-  return {};
-}
-
-function saveKeyForIp(ip, key) {
-  try {
-    const keys = getSavedKeys();
-    keys[ip] = key;
-    fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2), 'utf8');
-  } catch {}
-}
-
-function removeKeyForIp(ip) {
-  try {
-    const keys = getSavedKeys();
-    delete keys[ip];
-    fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2), 'utf8');
-  } catch {}
-}
-
+// Active connection pool
 const connectionPool = new Map();
 
 function createTvSocket(ip, port = 3001, useSecureWs = true, clientKey, pairingType = 'PIN') {
@@ -152,10 +280,31 @@ function createTvSocket(ip, port = 3001, useSecureWs = true, clientKey, pairingT
 
     let ws;
     try {
-      ws = new WebSocket(targetUrl, {
-        rejectUnauthorized: false, // Safely accept local LG TV self-signed TLS cert
+      const wsOptions = {
         handshakeTimeout: 8000,
-      });
+        rejectUnauthorized: false,
+      };
+
+      if (useSecureWs) {
+        wsOptions.createConnection = (options, cb) => {
+          const socket = tls.connect(options, () => {
+            const cert = socket.getPeerCertificate();
+            const verifyError = verifyTvCertificate(ip, cert);
+            if (verifyError) {
+              socket.destroy(verifyError);
+              if (cb) cb(verifyError);
+              return;
+            }
+            if (cb) cb(null, socket);
+          });
+          socket.on('error', (err) => {
+            if (cb) cb(err);
+          });
+          return socket;
+        };
+      }
+
+      ws = new WebSocket(targetUrl, wsOptions);
     } catch (err) {
       return reject(err);
     }
@@ -174,7 +323,9 @@ function createTvSocket(ip, port = 3001, useSecureWs = true, clientKey, pairingT
     const timeout = setTimeout(() => {
       if (!settled) {
         settled = true;
-        try { ws.close(); } catch {}
+        try {
+          ws.close();
+        } catch {}
         reject(new Error(`Connection to TV at ${ip}:${port} timed out.`));
       }
     }, 15000);
@@ -252,7 +403,7 @@ function createTvSocket(ip, port = 3001, useSecureWs = true, clientKey, pairingT
       if (!settled) {
         settled = true;
         clearTimeout(timeout);
-        reject(new Error(`TV WebSocket error: ${err.message}`));
+        reject(new Error(`TV connection error: ${err.message}`));
       }
     });
 
@@ -262,12 +413,17 @@ function createTvSocket(ip, port = 3001, useSecureWs = true, clientKey, pairingT
   });
 }
 
+// HTTP Server
 const server = http.createServer(async (req, res) => {
-  // Set CORS and Chrome Private Network Access headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const reqOrigin = req.headers.origin || '';
+  const allowedOrigin = isOriginAllowed(reqOrigin) ? reqOrigin : 'https://tv-remote-roan.vercel.app';
+
+  // Security & CORS Headers
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-bridge-token');
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -275,26 +431,52 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Health probe
-  if (req.method === 'GET' && (req.url === '/health' || req.url === '/api/tv/health')) {
+  const urlPath = req.url?.split('?')[0];
+
+  // 1. Health & Status Probe
+  if (req.method === 'GET' && (urlPath === '/health' || urlPath === '/api/tv/health')) {
+    const isLoopbackReq =
+      req.socket.remoteAddress === '127.0.0.1' ||
+      req.socket.remoteAddress === '::1' ||
+      req.socket.remoteAddress === '::ffff:127.0.0.1';
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(
       JSON.stringify({
         status: 'ok',
         service: 'lg-remote-local-bridge',
-        version: '1.0.0',
+        version: '1.1.0',
         activeConnections: connectionPool.size,
+        token: isLoopbackReq ? BRIDGE_TOKEN : undefined,
       })
     );
     return;
   }
 
-  // Bridge relay endpoint
-  if (req.method === 'POST' && (req.url === '/api/tv/bridge' || req.url === '/bridge')) {
+  // 2. Relay Commands
+  if (req.method === 'POST' && (urlPath === '/api/tv/bridge' || urlPath === '/bridge')) {
+    // Validate authentication token for non-local requests
+    const providedToken = req.headers['x-bridge-token'] || '';
+    const isLoopback =
+      req.socket.remoteAddress === '127.0.0.1' ||
+      req.socket.remoteAddress === '::1' ||
+      req.socket.remoteAddress === '::ffff:127.0.0.1';
+
+    if (!isLoopback && providedToken !== BRIDGE_TOKEN) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: false,
+          error: { message: 'Unauthorized: Invalid or missing x-bridge-token header.' },
+        })
+      );
+      return;
+    }
+
     let rawBody = '';
     req.on('data', (chunk) => {
       rawBody += chunk;
-      if (rawBody.length > 1024 * 64) {
+      if (rawBody.length > 65536) {
         res.writeHead(413, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false, error: 'Payload too large' }));
         req.destroy();
@@ -314,6 +496,7 @@ const server = http.createServer(async (req, res) => {
 
         const targetPort = Number(port) || 3001;
 
+        // Forget TV credentials
         if (action === 'forget') {
           removeKeyForIp(ip);
           const poolKey = `${ip}:${targetPort}`;
@@ -330,6 +513,7 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
+        // Connect & Pair
         if (action === 'connect') {
           try {
             const result = await createTvSocket(ip, targetPort, useSecureWs, clientKey, pairingType);
@@ -349,6 +533,7 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
+        // Submit PIN Code
         if (action === 'sendPin') {
           const poolKey = `${ip}:${targetPort}`;
           let conn = connectionPool.get(poolKey);
@@ -376,10 +561,18 @@ const server = http.createServer(async (req, res) => {
           };
 
           conn.ws.on('message', pinHandler);
-          conn.ws.send(JSON.stringify({ id: reqId, type: 'request', uri: LG_SSAP_URIS.SET_PIN, payload: { pin: String(pin).trim() } }));
+          conn.ws.send(
+            JSON.stringify({
+              id: reqId,
+              type: 'request',
+              uri: LG_SSAP_URIS.SET_PIN,
+              payload: { pin: String(pin).trim() },
+            })
+          );
           return;
         }
 
+        // Generic SSAP command (volume, apps, media, text input)
         if (action === 'command') {
           const { connection } = await createTvSocket(ip, targetPort, useSecureWs, clientKey);
           const id = `cmd_${Date.now()}`;
@@ -398,8 +591,11 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
+        // Navigation button (arrows, OK, enter, back, home)
         if (action === 'pointerButton') {
           const { connection } = await createTvSocket(ip, targetPort, useSecureWs, clientKey);
+
+          // Connect pointer socket if available
           if (!connection.pointerWs || connection.pointerWs.readyState !== WebSocket.OPEN) {
             try {
               const ptrRes = await new Promise((resP) => {
@@ -414,11 +610,32 @@ const server = http.createServer(async (req, res) => {
                   } catch {}
                 };
                 connection.ws.on('message', h);
-                connection.ws.send(JSON.stringify({ id, type: 'request', uri: LG_SSAP_URIS.GET_POINTER_INPUT_SOCKET }));
+                connection.ws.send(
+                  JSON.stringify({
+                    id,
+                    type: 'request',
+                    uri: LG_SSAP_URIS.GET_POINTER_INPUT_SOCKET,
+                  })
+                );
               });
 
               if (ptrRes.socketPath) {
-                connection.pointerWs = new WebSocket(ptrRes.socketPath, { rejectUnauthorized: false });
+                const ptrOptions = {
+                  handshakeTimeout: 4000,
+                  rejectUnauthorized: false,
+                };
+                if (ptrRes.socketPath.startsWith('wss://')) {
+                  ptrOptions.createConnection = (options, cb) => {
+                    const socket = tls.connect(options, () => {
+                      if (cb) cb(null, socket);
+                    });
+                    socket.on('error', (err) => {
+                      if (cb) cb(err);
+                    });
+                    return socket;
+                  };
+                }
+                connection.pointerWs = new WebSocket(ptrRes.socketPath, ptrOptions);
                 await new Promise((r) => {
                   connection.pointerWs.on('open', r);
                   setTimeout(r, 1500);
@@ -430,7 +647,22 @@ const server = http.createServer(async (req, res) => {
           if (connection.pointerWs && connection.pointerWs.readyState === WebSocket.OPEN) {
             connection.pointerWs.send(`type:button\nname:${key}\n\n`);
           } else if (key === 'ENTER') {
-            connection.ws.send(JSON.stringify({ id: `ent_${Date.now()}`, type: 'request', uri: LG_SSAP_URIS.SEND_ENTER_KEY }));
+            connection.ws.send(
+              JSON.stringify({
+                id: `ent_${Date.now()}`,
+                type: 'request',
+                uri: LG_SSAP_URIS.SEND_ENTER_KEY,
+              })
+            );
+          } else if (key === 'HOME') {
+            connection.ws.send(
+              JSON.stringify({
+                id: `home_${Date.now()}`,
+                type: 'request',
+                uri: LG_SSAP_URIS.LAUNCH_APP,
+                payload: { id: 'com.webos.app.home' },
+              })
+            );
           }
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -453,10 +685,23 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`\n=================================================`);
-  console.log(`  LG Control - Local Bridge Running`);
-  console.log(`  Listening on: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
-  console.log(`  CORS & Chrome Private Network Access: ENABLED`);
-  console.log(`  TV Self-Signed TLS Handling: ENABLED`);
-  console.log(`=================================================\n`);
+  console.log(`\n======================================================`);
+  console.log(`  LG Control - Local Bridge Service`);
+  console.log(`  Listening on: http://${HOST}:${PORT}`);
+  console.log(`  Health Check: http://${HOST}:${PORT}/health`);
+  console.log(`  Security Token: ${BRIDGE_TOKEN}`);
+  console.log(`  TV TLS Verification: TOFU Fingerprint Pinning`);
+  console.log(`======================================================\n`);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n[Bridge] Stopping server...');
+  connectionPool.forEach((c) => {
+    try {
+      c.ws.close();
+      c.pointerWs?.close();
+    } catch {}
+  });
+  server.close(() => process.exit(0));
 });

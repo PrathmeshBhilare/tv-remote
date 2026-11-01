@@ -1,85 +1,94 @@
-# Lumina Remote — Smart webOS TV Controller
+# LG Control — Smart TV Remote
 
-A sleek, mobile-first Progressive Web App (PWA) and web controller for LG webOS Smart TVs. Built with **Next.js 14 (App Router)**, **React 18**, **TypeScript**, and **Tailwind CSS**.
-
----
-
-## Features
-
-- **PWA Ready**: Installable on Android (via Chrome) and iPhone/iPad (via Safari "Add to Home Screen"). Works offline and in standalone full-screen mode.
-- **Starting Splash Screen**: Ambient glowing startup animation with a custom neon loading spinner.
-- **Smart Mobile Install Banner**: Detects standalone mode automatically and prompts mobile users with step-by-step installation instructions until installed.
-- **YouTube Video Search & Direct Play**: Search YouTube videos on your phone and tap any result to launch and play directly in the native YouTube TV app. Includes embedded D-Pad navigation for the on-screen TV keyboard.
-- **TV Pairing & Auto-Reconnect**: Supports both PIN-code and on-screen Prompt pairing. Securely retains pairing client keys locally for zero-friction instant reconnection.
-- **Precision Volume & Mute**: Responsive volume rocker (`+` / `-`) and mute toggle with live feedback.
-- **Directional Navigation**: Large circular D-Pad (Up, Down, Left, Right, OK) with dedicated Back and Home buttons backed by the webOS pointer input socket.
-- **App Quick Launch**: Discovers installed apps and launches YouTube, Netflix, and other webOS apps with status feedback.
-- **Local Network Privacy**: Communicates locally over Wi-Fi directly between your device and TV. No keys, searches, or TV commands are ever sent to third-party cloud servers.
+A premium, mobile-first Progressive Web App (PWA) and remote controller for LG webOS Smart TVs. Built with **Next.js 14**, **React 18**, **TypeScript**, and **Tailwind CSS**.
 
 ---
 
-## Technical Architecture
+## 1. Architecture Overview
 
-```text
-Mobile PWA / Browser Shell
-          │
-          ▼
-Next.js 14 App Router + React UI (Lumina)
-          │
-          ▼
-Shared TV Adapter Interface (ITVAdapter)
-          │
-    ┌─────┴─────────────────────────────────┐
-    ▼                                       ▼
-LG webOS Adapter                      Future TV Adapters
-(LGWebOSTVAdapter)                (Samsung, Roku, Android TV)
-    │
-    ▼
-Transport Abstraction (ITransportConnection)
-    │
-    ├──► Local Server Bridge (/api/tv/bridge on Node.js)
-    ├──► Direct Browser WebSocket Transport (wss:// / ws://)
-    └──► Native Transport (Capacitor/Cordova fallback)
-    │
-    ▼
-LG Smart TV (webOS SSAP on Port 3000 / 3001)
+### Why a Local Bridge is Required for Deployed Web Apps
+
+When this application is deployed to **Vercel on public HTTPS** (`https://tv-remote-roan.vercel.app`), modern web browsers enforce two strict security boundaries:
+
+1. **Untrusted Self-Signed Certificate (`NET::ERR_CERT_AUTHORITY_INVALID`):**
+   LG webOS TVs use an internal, self-signed TLS certificate on port `3001` (`wss://`). Browsers abort direct WebSocket connections from public HTTPS origins to untrusted local certificates.
+2. **Private Network Access (PNA):**
+   Modern Chromium browsers restrict public websites from opening raw sockets to private local IP addresses (`192.168.x.x`) without valid preflight responses.
+
+To solve this, LG Control provides a **secure local bridge** service that runs on your local network:
+
+```
+[ Deployed App (Vercel) ] ────────────────────────┐
+   (https://tv-remote-roan.vercel.app)            │
+                     │                            │
+                     ▼ (CORS + PNA preflight)     ▼ (Localhost only)
+            [ Local Bridge Service ]     [ Direct Browser Mode ]
+             (npm run bridge: 3005)       (when run on localhost:3000)
+                     │
+                     ▼ (TOFU SHA-256 TLS Pinning)
+           [ LG webOS Smart TV ]
+             (192.168.1.10:3001)
 ```
 
 ---
 
-## Quick Start
+## 2. Quick Start Guide
 
-### 1. Prerequisites
-- Node.js >= 18.x
-- Phone/PC and LG Smart TV connected to the **same local Wi-Fi network**.
+### Step 1: Start the Local Bridge (On PC / Mac on the same Wi-Fi)
 
-### 2. Installation
+In your terminal, run:
+
 ```bash
-npm install
+npm run bridge
 ```
 
-### 3. Run Development Server
-```bash
-npm run dev
-```
-Open **http://localhost:3000** on your phone or PC.
+This starts the secured bridge service on `http://127.0.0.1:3005`:
+- **Trust-on-First-Use (TOFU) TLS Verification:** Validates that the TV's certificate is issued by LG Electronics Inc. and pins its SHA-256 fingerprint in `.tv-fingerprints.json`.
+- **Private Network Access:** Returns `Access-Control-Allow-Private-Network: true` to satisfy Chrome's PNA security model.
+- **Local Token Authentication:** Auto-provisions and validates security tokens via `.bridge-token`.
 
-### 4. Run Tests & Build
-```bash
-npm test
-npm run build
-```
+### Step 2: Open LG Control
+
+- **On Desktop:** Open [https://tv-remote-roan.vercel.app](https://tv-remote-roan.vercel.app) or `http://localhost:3000`. The app will automatically detect the bridge running on `http://127.0.0.1:3005`.
+- **On Mobile (Phone):** Because your phone is a separate device from your computer, open Settings in the app and set the bridge address to your computer's local Wi-Fi IP (e.g. `http://192.168.1.15:3005`).
+
+### Step 3: Connect & Control
+
+1. Tap **Connect & Pair with TV**.
+2. Look at your TV screen for the 8-digit code (if first time pairing).
+3. Enter the 8 digits into the app — the client key is saved for automatic reconnects.
+4. Enjoy full remote functionality: Volume, Directional D-Pad, OK, YouTube Search & Text Typing, Netflix, and Media Controls.
 
 ---
 
-## Deploying to Vercel
+## 3. Scripts Reference
 
-1. Push your repository to GitHub.
-2. Import the project into [Vercel](https://vercel.com).
-3. Vercel automatically deploys with HTTPS enabled, allowing mobile users to install the PWA directly onto their device.
+| Command | Description |
+|---|---|
+| `npm run bridge` | Starts the secured local bridge service on port 3005 |
+| `npm run dev` | Starts local Next.js development server on port 3000 |
+| `npm run build` | Generates optimized production build (static + dynamic routes) |
+| `npm test` | Runs the full automated unit test suite (13 tests) |
+| `npm run cap:sync` | Syncs web assets to Capacitor Android project |
+| `npm run cap:android` | Opens native Android project in Android Studio |
 
 ---
 
-## License
+## 4. Security & Privacy
 
-MIT
+- **No Third-Party Cloud Relays:** All TV commands and credentials are kept strictly inside your local home Wi-Fi network.
+- **Client-Key Protection:** Pairing keys are stored locally on your device in `.tv-keys.json` and never exposed in logs.
+- **Certificate Pinning:** The bridge pins the TV's certificate SHA-256 fingerprint on first contact, preventing MITM attacks.
+
+---
+
+## 5. Physical TV Verified Capabilities
+
+Tested and verified against physical LG webOS Smart TV (`192.168.1.10:3001`):
+
+- **Power Off:** Fully operational (`ssap://system/turnOff`).
+- **Volume & Mute:** Real-time volume step adjustments (`ssap://audio/volumeUp`, `ssap://audio/volumeDown`).
+- **Navigation D-Pad:** Directional arrows and central `OK / Enter` button.
+- **YouTube App Launch:** 1-tap launch of native YouTube leanback TV application.
+- **YouTube Text Typing:** Direct text insertion into TV search box without browser redirects (`ssap://com.webos.service.ime/insertText`).
+- **Media Playback:** Play, Pause, Rewind, Fast Forward, and Stop.

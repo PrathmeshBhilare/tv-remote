@@ -62,7 +62,10 @@ export const DevicesSettings: React.FC<{ onAddDevice: () => void }> = ({ onAddDe
       const data = await res.json();
       if (data.status === 'ok') {
         TVProfileStorage.setBridgeUrl(target);
-        setBridgeStatus('Connected to local bridge server!');
+        if (data.token) {
+          TVProfileStorage.setBridgeToken(data.token);
+        }
+        setBridgeStatus(`Connected to local bridge (v${data.version || '1.1'})!`);
       } else {
         setBridgeStatus('Bridge returned unexpected status.');
       }

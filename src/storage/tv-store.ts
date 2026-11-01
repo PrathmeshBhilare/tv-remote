@@ -5,12 +5,14 @@ const STORAGE_KEY_PROFILES = 'lg_remote_saved_profiles_v1';
 const STORAGE_KEY_ACTIVE_ID = 'lg_remote_active_profile_id_v1';
 const STORAGE_KEY_SEARCH_HISTORY = 'lg_remote_yt_search_history_v1';
 const STORAGE_KEY_BRIDGE_URL = 'lg_remote_bridge_url_v1';
+const STORAGE_KEY_BRIDGE_TOKEN = 'lg_remote_bridge_token_v1';
 
 // In-memory cache for synchronous access across React components
 let cachedProfiles: TVProfile[] | null = null;
 let cachedActiveId: string | null = null;
 let cachedSearchHistory: string[] | null = null;
 let cachedBridgeUrl: string | null = null;
+let cachedBridgeToken: string | null = null;
 
 export class TVProfileStorage {
   private static isBrowser(): boolean {
@@ -152,9 +154,9 @@ export class TVProfileStorage {
     if (!this.isBrowser()) return '';
     if (cachedBridgeUrl !== null) return cachedBridgeUrl;
     try {
-      return (typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_BRIDGE_URL) : null) || '';
+      return (typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_BRIDGE_URL) : null) || 'http://127.0.0.1:3005';
     } catch {
-      return '';
+      return 'http://127.0.0.1:3005';
     }
   }
 
@@ -165,6 +167,27 @@ export class TVProfileStorage {
       if (typeof localStorage !== 'undefined') {
         if (url) localStorage.setItem(STORAGE_KEY_BRIDGE_URL, url);
         else localStorage.removeItem(STORAGE_KEY_BRIDGE_URL);
+      }
+    } catch {}
+  }
+
+  public static getBridgeToken(): string {
+    if (!this.isBrowser()) return '';
+    if (cachedBridgeToken !== null) return cachedBridgeToken;
+    try {
+      return (typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY_BRIDGE_TOKEN) : null) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  public static setBridgeToken(token: string): void {
+    if (!this.isBrowser()) return;
+    cachedBridgeToken = token;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        if (token) localStorage.setItem(STORAGE_KEY_BRIDGE_TOKEN, token);
+        else localStorage.removeItem(STORAGE_KEY_BRIDGE_TOKEN);
       }
     } catch {}
   }

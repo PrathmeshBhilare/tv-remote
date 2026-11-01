@@ -134,3 +134,4 @@ test('LGWebOSTVAdapter - Propagates TransportError code and remedies to Connecti
   assert.equal(details.technicalDetails, 'ERR_CERT_AUTHORITY_INVALID');
   assert.ok(details.remedies.length > 0);
 });
+

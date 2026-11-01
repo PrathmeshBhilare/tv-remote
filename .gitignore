@@ -17,7 +17,9 @@ yarn-error.log*
 Thumbs.db
 
 
-# Local TV client keys & pairing cache
+# Local TV client keys, TLS fingerprints & pairing tokens
 .tv-keys.json
+.tv-fingerprints.json
+.bridge-token
 
 *.tsbuildinfo

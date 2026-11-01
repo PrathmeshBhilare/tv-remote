@@ -126,9 +126,13 @@ export class LGWebOSTVAdapter implements ITVAdapter {
         this.usingBridge = true;
         this.notifyStateChange('connecting', `Connecting to ${profile.name || profile.ip} via local bridge...`);
 
+        const token = TVProfileStorage.getBridgeToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['x-bridge-token'] = token;
+
         const bridgeRes = await fetch(bridgeUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             action: 'connect',
             ip: profile.ip,
@@ -231,9 +235,13 @@ export class LGWebOSTVAdapter implements ITVAdapter {
       const bridgeUrl = getEffectiveBridgeUrl() || '/api/tv/bridge';
       try {
         this.notifyStateChange('connecting', 'Verifying PIN with TV...');
+        const token = TVProfileStorage.getBridgeToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['x-bridge-token'] = token;
+
         const res = await fetch(bridgeUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             action: 'sendPin',
             ip: this.currentProfile.ip,
@@ -304,9 +312,13 @@ export class LGWebOSTVAdapter implements ITVAdapter {
   private async callBridge(action: string, extra: Record<string, unknown> = {}): Promise<unknown> {
     if (!this.currentProfile) throw new Error('No active TV profile');
     const bridgeUrl = getEffectiveBridgeUrl() || '/api/tv/bridge';
+    const token = TVProfileStorage.getBridgeToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['x-bridge-token'] = token;
+
     const res = await fetch(bridgeUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         action,
         ip: this.currentProfile.ip,

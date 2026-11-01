@@ -214,49 +214,16 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ onBack, onSuccess 
             </div>
           )}
 
-          {/* Certificate Authorization Helper for Deployed HTTPS apps */}
-          {(showCertHelp || isHttps) && (
+          {/* Bridge Status & Help if Code Not Appearing */}
+          {errorMessage && (
             <div className="bg-[#12130F] border border-[#25261F] rounded-2xl p-3 flex flex-col gap-2 w-full text-left">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-[#F1EEE3] flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#B6AD83]" />
-                  Code not appearing on TV?
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowCertHelp(!showCertHelp)}
-                  className="text-[10px] text-[#B6AD83] hover:text-[#D5CBA8] font-medium cursor-pointer"
-                >
-                  {showCertHelp ? 'Hide' : 'Fix now'}
-                </button>
-              </div>
-
-              {showCertHelp && (
-                <div className="flex flex-col gap-2 pt-1 text-[11px] text-[#A8A69A]">
-                  <p className="leading-relaxed">
-                    On deployed web apps, your browser blocks self-signed TLS certificates on local devices. Use either:
-                  </p>
-                  <div className="flex flex-col gap-1.5 text-[10px] text-[#737267]">
-                    <div className="flex items-center gap-1.5 text-[#D5CBA8]">
-                      <Smartphone className="w-3.5 h-3.5 text-[#8F9E6D]" />
-                      <span><strong>Android Native App:</strong> Bypasses SSL blocks completely.</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[#D5CBA8]">
-                      <Server className="w-3.5 h-3.5 text-[#B6AD83]" />
-                      <span><strong>Local Bridge:</strong> Run &ldquo;npm run bridge&rdquo; on local Wi-Fi.</span>
-                    </div>
-                  </div>
-                  <a
-                    href={`https://${currentProfile?.ip || '192.168.1.10'}:3001`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1 h-9 rounded-xl bg-[#25261F] hover:bg-[#2F3127] border border-[#B6AD83]/30 text-[#D5CBA8] text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5 text-[#B6AD83]" />
-                    <span>Authorize TV in Browser (Tap to Allow)</span>
-                  </a>
-                </div>
-              )}
+              <span className="text-[11px] font-semibold text-[#F1EEE3] flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-[#B6AD83]" />
+                Pairing Troubleshooting
+              </span>
+              <p className="text-[11px] text-[#A8A69A] leading-relaxed">
+                If the code is not appearing on your TV, ensure the local bridge is running with <code className="text-[#D5CBA8]">npm run bridge</code> and that your TV is powered on.
+              </p>
             </div>
           )}
 
