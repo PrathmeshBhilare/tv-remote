@@ -8,6 +8,8 @@ import {
   AlertCircle,
   ArrowLeft,
   RotateCw,
+  ExternalLink,
+  ShieldAlert,
 } from 'lucide-react';
 import { useTV } from '../../src/hooks/use-tv';
 
@@ -30,6 +32,9 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ onBack, onSuccess 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<'pin' | 'prompt'>('pin');
+  const [showCertHelp, setShowCertHelp] = useState(false);
+
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
 
   // Sync mode with connectionState if TV requests PROMPT or PIN
   useEffect(() => {
@@ -91,7 +96,11 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ onBack, onSuccess 
     setPin('');
     setErrorMessage(null);
     if (currentProfile) {
-      await connectTV(currentProfile, 'PIN');
+      const res = await connectTV(currentProfile, 'PIN');
+      if (!res.success && res.error) {
+        setErrorMessage(res.error);
+        setShowCertHelp(true);
+      }
     }
   };
 
@@ -201,6 +210,47 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ onBack, onSuccess 
             <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
               <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* Certificate Authorization Helper for Deployed HTTPS apps */}
+          {(showCertHelp || isHttps) && (
+            <div className="bg-tv-bg border border-tv-border rounded-xl p-3 flex flex-col gap-2 w-full text-left">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-tv-textPrimary flex items-center gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-blue-400" />
+                  Code not appearing on TV?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowCertHelp(!showCertHelp)}
+                  className="text-[10px] text-blue-400 hover:text-blue-300 font-medium cursor-pointer"
+                >
+                  {showCertHelp ? 'Hide' : 'Fix now'}
+                </button>
+              </div>
+
+              {showCertHelp && (
+                <div className="flex flex-col gap-2 pt-1 text-[11px] text-tv-textSecondary">
+                  <p className="leading-relaxed">
+                    On deployed web apps, your browser must allow the TV&apos;s self-signed security certificate once:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-tv-textMuted text-[10px]">
+                    <li>Tap <strong>Authorize TV</strong> below (opens new tab)</li>
+                    <li>Tap <strong>&ldquo;Advanced&rdquo;</strong> &rarr; <strong>&ldquo;Proceed to {currentProfile?.ip || '192.168.1.10'} (unsafe)&rdquo;</strong></li>
+                    <li>Return here and tap <strong>&ldquo;Resend code to TV&rdquo;</strong></li>
+                  </ol>
+                  <a
+                    href={`https://${currentProfile?.ip || '192.168.1.10'}:3001`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 h-9 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Authorize TV in Browser (Tap Once)</span>
+                  </a>
+                </div>
+              )}
             </div>
           )}
 

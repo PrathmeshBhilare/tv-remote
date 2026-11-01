@@ -27,7 +27,10 @@ interface TVContextValue {
   isConnectModalOpen: boolean;
   openConnectModal: () => void;
   closeConnectModal: () => void;
-  connectTV: (profile: TVProfile, pairingType?: 'PROMPT' | 'PIN') => Promise<boolean>;
+  connectTV: (
+    profile: TVProfile,
+    pairingType?: 'PROMPT' | 'PIN'
+  ) => Promise<{ success: boolean; requiresPin?: boolean; requiresPrompt?: boolean; error?: string }>;
   submitPairingPin: (pin: string) => Promise<boolean>;
   disconnectTV: () => Promise<void>;
   forgetCurrentTV: () => Promise<void>;
@@ -202,8 +205,11 @@ export function TVProvider({ children }: { children: React.ReactNode }) {
   }, [connectionState, showFeedback]);
 
   const connectTV = useCallback(
-    async (profile: TVProfile, pairingType?: 'PROMPT' | 'PIN'): Promise<boolean> => {
-      if (!adapterRef.current) return false;
+    async (
+      profile: TVProfile,
+      pairingType?: 'PROMPT' | 'PIN'
+    ): Promise<{ success: boolean; requiresPin?: boolean; requiresPrompt?: boolean; error?: string }> => {
+      if (!adapterRef.current) return { success: false, error: 'TV adapter not initialized.' };
       setCurrentProfile(profile);
       showFeedback(`Connecting to ${profile.name || profile.ip}...`);
 
@@ -223,13 +229,17 @@ export function TVProvider({ children }: { children: React.ReactNode }) {
         if (res.clientKey && !profile.clientKey) {
           runPostPairingSelfTest();
         }
-        return true;
+        return { success: true };
       } else if (res.requiresPin) {
         showFeedback('Please enter the PIN code displayed on your TV screen.');
-        return false;
+        return { success: false, requiresPin: true };
+      } else if (res.pairingType === 'PROMPT') {
+        showFeedback('Please accept the connection prompt on your TV screen.');
+        return { success: false, requiresPrompt: true };
       } else {
-        showFeedback(res.error?.message || 'Connection failed', true);
-        return false;
+        const errMsg = res.error?.message || 'Connection failed';
+        showFeedback(errMsg, true);
+        return { success: false, error: errMsg };
       }
     },
     [showFeedback, refreshTVStatus, runPostPairingSelfTest]

@@ -23,6 +23,31 @@ async function safeParseJson(res: Response): Promise<any> {
   }
 }
 
+function isPrivateLanIp(ip: string): boolean {
+  if (!ip) return false;
+  return (
+    ip.startsWith('192.168.') ||
+    ip.startsWith('10.') ||
+    ip.startsWith('172.16.') ||
+    ip.startsWith('172.17.') ||
+    ip.startsWith('172.18.') ||
+    ip.startsWith('172.19.') ||
+    ip.startsWith('172.2') ||
+    ip.startsWith('172.30.') ||
+    ip.startsWith('172.31.') ||
+    ip.endsWith('.local')
+  );
+}
+
+function isCloudEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1' || isPrivateLanIp(host)) {
+    return false;
+  }
+  return true;
+}
+
 export class LGWebOSTVAdapter implements ITVAdapter {
   public readonly brand = 'LG webOS';
   private ssapClient: SSAPClient;
@@ -68,9 +93,10 @@ export class LGWebOSTVAdapter implements ITVAdapter {
     const port = this.currentProfile.port || 3001;
     const pairingMode = preferredPairingType || profile.pairingType || 'PIN';
 
-    // In real web browser (localhost/LAN) without custom mock transport, use local server bridge
-    // This bypasses browser self-signed SSL restrictions on port 3001
-    if (typeof window !== 'undefined' && !this.hasCustomTransport) {
+    // In local environments (localhost or local server) without custom mock transport,
+    // attempt local bridge first to handle self-signed SSL on port 3001.
+    // If running in a cloud deployment (Vercel), skip bridge because cloud servers cannot reach home LAN IPs!
+    if (typeof window !== 'undefined' && !this.hasCustomTransport && !isCloudEnvironment()) {
       try {
         this.usingBridge = true;
         this.notifyStateChange('connecting', `Connecting to ${profile.name || profile.ip}...`);
@@ -109,39 +135,59 @@ export class LGWebOSTVAdapter implements ITVAdapter {
         }
 
         if (data.error) {
-          throw new Error(data.error.message || 'TV connection failed');
+          console.warn('Local bridge returned error, falling back to direct connection:', data.error);
         }
       } catch (bridgeErr) {
-        this.notifyStateChange('error', bridgeErr instanceof Error ? bridgeErr.message : 'Connection failed');
-        return {
-          success: false,
-          error: {
-            code: 'BRIDGE_CONNECTION_FAILED',
-            message: bridgeErr instanceof Error ? bridgeErr.message : 'Connection failed',
-          },
-        };
+        console.warn('Local bridge request failed, falling back to direct connection:', bridgeErr);
       }
     }
 
-    // Direct transport (used for unit tests and native Android wrappers)
+    // Direct client-side transport (used for cloud deployments, browser direct mode, and native Android wrappers)
     this.usingBridge = false;
-    const protocol = profile.useSecureWs ? 'wss' : 'ws';
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const protocol = isHttps ? 'wss' : (profile.useSecureWs ? 'wss' : 'ws');
     const url = `${protocol}://${profile.ip}:${port}`;
 
     try {
+      this.notifyStateChange('connecting', `Connecting to TV at ${profile.ip}...`);
       const reg = await this.ssapClient.connect(url, profile.clientKey, pairingMode);
 
       if (reg.requiresPin) {
+        this.notifyStateChange('pairing_pin', 'Enter the PIN displayed on your TV screen.');
         return { success: false, requiresPin: true, pairingType: 'PIN' };
       }
 
-      return { success: true, clientKey: reg.clientKey };
+      if (reg.clientKey) {
+        if (this.currentProfile) {
+          this.currentProfile.clientKey = reg.clientKey;
+        }
+
+        // Initialize pointer client for navigation buttons asynchronously
+        this.ssapClient
+          .request<{ socketPath?: string }>(LG_SSAP_URIS.GET_POINTER_INPUT_SOCKET, undefined, 2000)
+          .then((ptrRes) => {
+            if (ptrRes?.socketPath) {
+              return this.pointerClient.connect(ptrRes.socketPath);
+            }
+          })
+          .catch(() => {
+            // Pointer socket will be connected on demand by pressKey if needed
+          });
+
+        this.notifyStateChange('connected', 'Connected to TV');
+        return { success: true, clientKey: reg.clientKey };
+      }
+
+      this.notifyStateChange('connected', 'Connected to TV');
+      return { success: true };
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Connection failed';
+      this.notifyStateChange('error', errMsg);
       return {
         success: false,
         error: {
           code: 'CONNECTION_FAILED',
-          message: err instanceof Error ? err.message : 'Connection failed',
+          message: errMsg,
         },
       };
     }
@@ -189,12 +235,35 @@ export class LGWebOSTVAdapter implements ITVAdapter {
 
     // Direct SSAP client
     try {
+      this.notifyStateChange('connecting', 'Verifying PIN with TV...');
       const res = await this.ssapClient.sendPin(pin);
+      if (res.clientKey) {
+        if (this.currentProfile) {
+          this.currentProfile.clientKey = res.clientKey;
+        }
+
+        // Initialize pointer socket for navigation asynchronously
+        this.ssapClient
+          .request<{ socketPath?: string }>(LG_SSAP_URIS.GET_POINTER_INPUT_SOCKET, undefined, 2000)
+          .then((ptrRes) => {
+            if (ptrRes?.socketPath) {
+              return this.pointerClient.connect(ptrRes.socketPath);
+            }
+          })
+          .catch(() => {
+            // Pointer socket will be connected on demand by pressKey if needed
+          });
+
+        this.notifyStateChange('connected', 'PIN verified! TV paired successfully.');
+        return { success: true, clientKey: res.clientKey };
+      }
       return { success: true, clientKey: res.clientKey };
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Incorrect PIN entered. Check TV screen.';
+      this.notifyStateChange('pairing_pin', errMsg);
       return {
         success: false,
-        error: { code: 'PIN_VERIFICATION_FAILED', message: err instanceof Error ? err.message : 'PIN failed' },
+        error: { code: 'PIN_VERIFICATION_FAILED', message: errMsg },
       };
     }
   }
@@ -320,6 +389,17 @@ export class LGWebOSTVAdapter implements ITVAdapter {
     if (this.pointerClient.isConnected()) {
       return this.pointerClient.sendButton(key);
     }
+
+    // Try connecting pointer input socket on demand if not already connected
+    try {
+      const ptrRes = await this.ssapClient.request<{ socketPath?: string }>(LG_SSAP_URIS.GET_POINTER_INPUT_SOCKET);
+      if (ptrRes?.socketPath) {
+        await this.pointerClient.connect(ptrRes.socketPath);
+        if (this.pointerClient.isConnected()) {
+          return this.pointerClient.sendButton(key);
+        }
+      }
+    } catch {}
 
     if (key === 'ENTER') {
       try {

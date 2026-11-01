@@ -87,11 +87,13 @@ export class BrowserWebSocketTransport implements ITransportConnection {
         };
 
         socket.onerror = (event: Event) => {
-          const isSecurityBlock =
-            isHttpsPage && isPlainWsTarget;
+          const isSecurityBlock = isHttpsPage && (isPlainWsTarget || url.startsWith('wss://'));
+          const errorMsg = isHttpsPage
+            ? `Cannot connect to TV at ${url}. On HTTPS / deployed apps, browsers require authorizing the TV's self-signed certificate once. Click "Authorize TV in Browser" below.`
+            : `WebSocket encountered an error connecting to ${url}. Check if the TV is powered on, on the same Wi-Fi, and the port is accessible.`;
           const error = new TransportError(
-            `WebSocket encountered an error connecting to ${url}. Check if the TV is powered on, port is accessible, or browser restricted local LAN WebSocket access.`,
-            'SOCKET_ERROR',
+            errorMsg,
+            isHttpsPage ? 'CERT_OR_LAN_BLOCKED' : 'SOCKET_ERROR',
             event,
             isSecurityBlock
           );
