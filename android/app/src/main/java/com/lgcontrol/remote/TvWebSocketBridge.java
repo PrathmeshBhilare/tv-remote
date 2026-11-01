@@ -1,5 +1,6 @@
 package com.lgcontrol.remote;
 
+import android.util.Base64;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import androidx.annotation.NonNull;
@@ -10,8 +11,8 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.WebSocket;
 import okhttp3.WebSocketListener;
-import org.json.JSONObject;
 
+import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.TimeUnit;
@@ -35,6 +36,17 @@ public class TvWebSocketBridge {
     public TvWebSocketBridge(BridgeActivity activity) {
         this.activity = activity;
         this.httpClient = createTlsPermissiveClient();
+    }
+
+    private static String toSafeJsArg(String text) {
+        if (text == null) return "''";
+        try {
+            byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+            String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+            return "decodeURIComponent(escape(atob('" + b64 + "')))";
+        } catch (Exception e) {
+            return "''";
+        }
     }
 
     private OkHttpClient createTlsPermissiveClient() {
@@ -90,36 +102,36 @@ public class TvWebSocketBridge {
 
                 @Override
                 public void onMessage(@NonNull WebSocket ws, @NonNull String text) {
-                    String quoted = JSONObject.quote(text);
-                    runOnWeb("window.__onAndroidBridgeMessage && window.__onAndroidBridgeMessage(" + quoted + ");");
+                    String safeArg = toSafeJsArg(text);
+                    runOnWeb("window.__onAndroidBridgeMessage && window.__onAndroidBridgeMessage(" + safeArg + ");");
                 }
 
                 @Override
                 public void onClosing(@NonNull WebSocket ws, int code, @NonNull String reason) {
                     isConnected = false;
-                    String quotedReason = JSONObject.quote(reason);
-                    runOnWeb("window.__onAndroidBridgeClose && window.__onAndroidBridgeClose(" + code + ", " + quotedReason + ");");
+                    String safeArg = toSafeJsArg(reason);
+                    runOnWeb("window.__onAndroidBridgeClose && window.__onAndroidBridgeClose(" + code + ", " + safeArg + ");");
                 }
 
                 @Override
                 public void onClosed(@NonNull WebSocket ws, int code, @NonNull String reason) {
                     isConnected = false;
-                    String quotedReason = JSONObject.quote(reason);
-                    runOnWeb("window.__onAndroidBridgeClose && window.__onAndroidBridgeClose(" + code + ", " + quotedReason + ");");
+                    String safeArg = toSafeJsArg(reason);
+                    runOnWeb("window.__onAndroidBridgeClose && window.__onAndroidBridgeClose(" + code + ", " + safeArg + ");");
                 }
 
                 @Override
                 public void onFailure(@NonNull WebSocket ws, @NonNull Throwable t, @Nullable Response response) {
                     isConnected = false;
                     String msg = t.getMessage() != null ? t.getMessage() : "Native socket failure";
-                    String quoted = JSONObject.quote(msg);
-                    runOnWeb("window.__onAndroidBridgeError && window.__onAndroidBridgeError(" + quoted + ");");
+                    String safeArg = toSafeJsArg(msg);
+                    runOnWeb("window.__onAndroidBridgeError && window.__onAndroidBridgeError(" + safeArg + ");");
                 }
             });
         } catch (Exception e) {
             isConnected = false;
-            String quoted = JSONObject.quote(e.getMessage() != null ? e.getMessage() : "Failed to open socket");
-            runOnWeb("window.__onAndroidBridgeError && window.__onAndroidBridgeError(" + quoted + ");");
+            String safeArg = toSafeJsArg(e.getMessage() != null ? e.getMessage() : "Failed to open socket");
+            runOnWeb("window.__onAndroidBridgeError && window.__onAndroidBridgeError(" + safeArg + ");");
         }
     }
 
@@ -158,4 +170,3 @@ public class TvWebSocketBridge {
         });
     }
 }
-
