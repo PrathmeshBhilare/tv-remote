@@ -7,10 +7,11 @@ interface RemoteActionButtonProps {
   onDisabledClick?: () => void;
   children: React.ReactNode;
   ariaLabel: string;
-  variant?: 'primary' | 'secondary' | 'accent' | 'danger' | 'ghost';
-  size?: 'sm' | 'md' | 'lg' | 'pad';
+  variant?: 'primary' | 'secondary' | 'accent' | 'danger' | 'ghost' | 'dpad';
+  size?: 'sm' | 'md' | 'lg' | 'pad' | 'pill';
   disabled?: boolean;
   className?: string;
+  active?: boolean;
 }
 
 export const RemoteActionButton: React.FC<RemoteActionButtonProps> = ({
@@ -22,22 +23,23 @@ export const RemoteActionButton: React.FC<RemoteActionButtonProps> = ({
   size = 'md',
   disabled = false,
   className = '',
+  active = false,
 }) => {
-  const [isActive, setIsActive] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
 
   const handlePress = async (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
 
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {
-        navigator.vibrate(20);
+        navigator.vibrate(15);
       } catch {
         // ignore
       }
     }
 
-    setIsActive(true);
-    setTimeout(() => setIsActive(false), 150);
+    setIsPressed(true);
+    setTimeout(() => setIsPressed(false), 140);
 
     if (disabled) {
       if (onDisabledClick) {
@@ -56,27 +58,31 @@ export const RemoteActionButton: React.FC<RemoteActionButtonProps> = ({
   const getVariantStyles = () => {
     switch (variant) {
       case 'primary':
-        return 'bg-tv-surface hover:bg-tv-surfaceHover active:bg-tv-surfaceActive text-tv-textPrimary border border-tv-border shadow-remoteButton';
+        return 'bg-[#25261F] hover:bg-[#2C2E25] active:bg-[#1C1D17] text-[#F1EEE3] border border-[#36382E] shadow-remoteButton';
       case 'accent':
-        return 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-remoteButton font-semibold';
+        return 'bg-[#B6AD83] hover:bg-[#C4BB91] active:bg-[#9E956C] text-[#10110E] font-semibold shadow-remoteButton border border-[#D5CBA8]/40';
       case 'danger':
-        return 'bg-tv-dangerMuted hover:bg-rose-500/20 active:bg-rose-500/30 text-rose-400 border border-rose-500/30';
+        return 'bg-[#25261F] hover:bg-[#C95D53]/20 active:bg-[#C95D53]/30 text-[#C95D53] border border-[#C95D53]/30';
+      case 'dpad':
+        return 'bg-transparent hover:bg-[#25261F]/60 active:bg-[#25261F] text-[#A8A69A] active:text-[#F1EEE3] transition-colors';
       case 'ghost':
-        return 'bg-transparent hover:bg-tv-surfaceHover text-tv-textSecondary active:text-tv-textPrimary';
+        return 'bg-transparent hover:bg-[#191A15] active:bg-[#25261F] text-[#A8A69A] active:text-[#F1EEE3] border border-transparent';
       case 'secondary':
       default:
-        return 'bg-tv-surface/80 hover:bg-tv-surfaceHover active:bg-tv-surfaceActive text-tv-textPrimary border border-tv-border/80 shadow-remoteButton';
+        return 'bg-[#191A15] hover:bg-[#20221B] active:bg-[#25261F] text-[#F1EEE3] border border-[#2A2C23] shadow-remoteButton';
     }
   };
 
   const getSizeStyles = () => {
     switch (size) {
       case 'sm':
-        return 'h-11 w-11 min-h-[44px] min-w-[44px] text-xs';
+        return 'h-10 w-10 min-h-[40px] min-w-[40px] text-xs';
       case 'lg':
         return 'h-16 w-16 min-h-[48px] min-w-[48px] text-lg';
       case 'pad':
         return 'h-14 w-14 min-h-[48px] min-w-[48px] text-base';
+      case 'pill':
+        return 'h-11 px-4 min-h-[44px] text-xs font-medium';
       case 'md':
       default:
         return 'h-12 w-12 min-h-[44px] min-w-[44px] text-sm';
@@ -88,9 +94,10 @@ export const RemoteActionButton: React.FC<RemoteActionButtonProps> = ({
       type="button"
       aria-label={ariaLabel}
       onClick={handlePress}
-      className={`relative inline-flex items-center justify-center rounded-2xl select-none transition-all duration-100 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer ${getVariantStyles()} ${getSizeStyles()} ${
-        isActive ? 'scale-[0.92] brightness-125' : 'scale-100'
-      } ${disabled ? 'opacity-40' : ''} ${className}`}
+      disabled={disabled}
+      className={`relative inline-flex items-center justify-center rounded-2xl select-none transition-all duration-100 ease-out cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed ${getVariantStyles()} ${getSizeStyles()} ${
+        isPressed || active ? 'scale-[0.96] brightness-90 shadow-remoteButtonActive' : 'hover:scale-[1.01]'
+      } ${className}`}
     >
       {children}
     </button>

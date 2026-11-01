@@ -5,6 +5,8 @@ if (typeof process !== 'undefined') {
 }
 
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 import fs from 'fs';
 import path from 'path';
 import WebSocket from 'ws';

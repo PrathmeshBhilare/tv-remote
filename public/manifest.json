@@ -1,15 +1,15 @@
 {
-  "name": "Lumina Smart Remote",
-  "short_name": "Lumina",
-  "description": "Ultra-fast smart remote & media controller for LG webOS TVs",
+  "name": "LG Control",
+  "short_name": "LG Control",
+  "description": "Smart TV Remote for LG webOS TVs",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0B0E17",
-  "theme_color": "#0B0E17",
+  "background_color": "#10110E",
+  "theme_color": "#10110E",
   "orientation": "portrait",
   "scope": "/",
   "id": "/",
-  "categories": ["utilities", "entertainment"],
+  "categories": ["utilities", "lifestyle"],
   "icons": [
     {
       "src": "/icons/icon-192.png",

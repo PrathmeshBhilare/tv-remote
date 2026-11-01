@@ -25,61 +25,65 @@ export const DevicesSettings: React.FC<{ onAddDevice: () => void }> = ({ onAddDe
   const isConnected = connectionState === 'connected';
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-sm px-4 select-none pb-8">
+    <div className="flex flex-col gap-5 w-full max-w-sm px-4 select-none pb-8 animate-fadeIn">
       {/* Active Device Card */}
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs uppercase tracking-widest text-tv-textMuted font-semibold">
-          Active Device
+        <h3 className="text-[10px] uppercase tracking-widest text-[#737267] font-semibold">
+          Active TV Device
         </h3>
 
         {currentProfile ? (
-          <div className="bg-tv-surface border border-tv-border rounded-2xl p-4 flex flex-col gap-3 shadow-remoteButton">
+          <div className="bg-[#191A15] border border-[#2A2C23] rounded-3xl p-4 flex flex-col gap-3 shadow-card">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
-                  <Tv className="w-5 h-5 text-blue-500" />
+                <div className="w-11 h-11 rounded-2xl bg-[#25261F] border border-[#36382E] flex items-center justify-center">
+                  <Tv className="w-5 h-5 text-[#B6AD83]" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-tv-textPrimary">{currentProfile.name}</h4>
-                  <p className="text-xs text-tv-textSecondary font-mono">{currentProfile.ip}:{currentProfile.port}</p>
+                  <h4 className="text-sm font-bold text-[#F1EEE3] leading-snug">
+                    {currentProfile.name}
+                  </h4>
+                  <p className="text-xs text-[#A8A69A] font-mono">
+                    {currentProfile.ip}:{currentProfile.port || 3001}
+                  </p>
                 </div>
               </div>
 
               <span
                 className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${
                   isConnected
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    ? 'bg-[#8F9E6D]/15 text-[#D5CBA8] border border-[#8F9E6D]/30'
+                    : 'bg-[#25261F] text-[#737267] border border-[#36382E]'
                 }`}
               >
                 {isConnected ? 'Online' : 'Offline'}
               </span>
             </div>
 
-            <div className="flex items-center gap-2 pt-2 border-t border-tv-border">
+            <div className="flex items-center gap-2 pt-2 border-t border-[#2A2C23]">
               <button
                 type="button"
                 onClick={() => connectTV(currentProfile)}
-                className="flex-1 py-2 px-3 rounded-xl bg-tv-surfaceHover hover:bg-tv-surfaceActive text-xs text-tv-textPrimary font-medium flex items-center justify-center gap-1.5 transition-colors"
+                className="flex-1 py-2 px-3 rounded-xl bg-[#25261F] hover:bg-[#2F3127] text-xs text-[#F1EEE3] font-medium flex items-center justify-center gap-1.5 border border-[#36382E] transition-colors cursor-pointer"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Reconnect
+                <RefreshCw className="w-3.5 h-3.5 text-[#B6AD83]" />
+                <span>Reconnect</span>
               </button>
 
               <button
                 type="button"
                 disabled={!isConnected}
                 onClick={powerOff}
-                className="py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-xs text-rose-400 font-medium flex items-center justify-center gap-1.5 border border-rose-500/20 disabled:opacity-40 transition-colors"
+                className="py-2 px-3 rounded-xl bg-[#C95D53]/15 hover:bg-[#C95D53]/25 text-xs text-[#C95D53] font-medium flex items-center justify-center gap-1.5 border border-[#C95D53]/30 disabled:opacity-40 transition-colors cursor-pointer"
               >
                 <Power className="w-3.5 h-3.5" />
-                Power Off
+                <span>Power Off</span>
               </button>
 
               <button
                 type="button"
                 onClick={forgetCurrentTV}
-                className="py-2 px-3 rounded-xl bg-tv-surfaceHover hover:bg-rose-500/20 text-xs text-tv-textMuted hover:text-rose-400 flex items-center justify-center transition-colors"
+                className="py-2 px-3 rounded-xl bg-[#25261F] hover:bg-[#C95D53]/20 text-xs text-[#737267] hover:text-[#C95D53] flex items-center justify-center transition-colors border border-[#36382E] cursor-pointer"
                 title="Forget TV Credentials"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -87,8 +91,8 @@ export const DevicesSettings: React.FC<{ onAddDevice: () => void }> = ({ onAddDe
             </div>
           </div>
         ) : (
-          <div className="bg-tv-surface/60 border border-dashed border-tv-border rounded-2xl p-6 text-center text-xs text-tv-textMuted flex flex-col items-center gap-2">
-            <Tv className="w-8 h-8 opacity-40" />
+          <div className="bg-[#191A15] border border-dashed border-[#2A2C23] rounded-3xl p-6 text-center text-xs text-[#737267] flex flex-col items-center gap-2">
+            <Tv className="w-8 h-8 opacity-40 text-[#B6AD83]" />
             <p>No active TV connected</p>
           </div>
         )}
@@ -97,16 +101,16 @@ export const DevicesSettings: React.FC<{ onAddDevice: () => void }> = ({ onAddDe
       {/* Saved TVs List */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs uppercase tracking-widest text-tv-textMuted font-semibold">
+          <h3 className="text-[10px] uppercase tracking-widest text-[#737267] font-semibold">
             Saved TVs ({profiles.length})
           </h3>
           <button
             type="button"
             onClick={onAddDevice}
-            className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-1 font-medium cursor-pointer"
+            className="text-xs text-[#B6AD83] hover:text-[#D5CBA8] flex items-center gap-1 font-medium cursor-pointer transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            Add TV
+            <span>Add TV</span>
           </button>
         </div>
 
@@ -114,25 +118,25 @@ export const DevicesSettings: React.FC<{ onAddDevice: () => void }> = ({ onAddDe
           {profiles.map((p) => (
             <div
               key={p.id}
-              className="bg-tv-surface border border-tv-border rounded-xl p-3 flex items-center justify-between"
+              className="bg-[#191A15] border border-[#2A2C23] rounded-2xl p-3 flex items-center justify-between"
             >
               <div className="flex flex-col">
-                <span className="text-xs font-semibold text-tv-textPrimary">{p.name}</span>
-                <span className="text-[11px] text-tv-textMuted font-mono">{p.ip}</span>
+                <span className="text-xs font-semibold text-[#F1EEE3]">{p.name}</span>
+                <span className="text-[11px] text-[#737267] font-mono">{p.ip}</span>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => connectTV(p)}
-                  className="px-2.5 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-xs font-medium border border-blue-500/20"
+                  className="px-3 py-1.5 rounded-xl bg-[#B6AD83]/15 hover:bg-[#B6AD83]/25 text-[#D5CBA8] text-xs font-medium border border-[#B6AD83]/30 transition-colors cursor-pointer"
                 >
                   Connect
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDeleteProfile(p.id)}
-                  className="p-1.5 text-tv-textMuted hover:text-rose-400 transition-colors"
+                  className="p-1.5 text-[#737267] hover:text-[#C95D53] transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -142,25 +146,21 @@ export const DevicesSettings: React.FC<{ onAddDevice: () => void }> = ({ onAddDe
         </div>
       </div>
 
-      {/* Network & Security Diagnostics */}
+      {/* Network & Security Architecture Note */}
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs uppercase tracking-widest text-tv-textMuted font-semibold flex items-center gap-1.5">
-          <Network className="w-3.5 h-3.5" />
-          Network & Architecture Info
+        <h3 className="text-[10px] uppercase tracking-widest text-[#737267] font-semibold flex items-center gap-1.5">
+          <Network className="w-3.5 h-3.5 text-[#B6AD83]" />
+          <span>Local Security Architecture</span>
         </h3>
-        <div className="bg-tv-surface border border-tv-border rounded-2xl p-3.5 text-xs text-tv-textSecondary space-y-2">
+        <div className="bg-[#191A15] border border-[#2A2C23] rounded-2xl p-3.5 text-xs text-[#A8A69A] space-y-2 shadow-sm">
           <div className="flex items-start gap-2">
-            <Shield className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <Shield className="w-4 h-4 text-[#8F9E6D] shrink-0 mt-0.5" />
             <p className="text-[11px] leading-relaxed">
-              <strong className="text-tv-textPrimary">Zero Cloud Proxy:</strong> All communication happens directly across your local network between your device and the TV. Client keys are stored locally and never transmitted to external servers.
+              <strong className="text-[#F1EEE3]">Direct Local Wi-Fi Connection:</strong> All TV commands run directly between your phone and your television over secure local SSAP WebSocket. Your keys remain stored safely on your device.
             </p>
-          </div>
-          <div className="pt-2 border-t border-tv-border text-[11px] text-tv-textMuted">
-            If browser security blocks WebSocket connections to local IP addresses, run the application inside the native Android container shell.
           </div>
         </div>
       </div>
     </div>
   );
 };
-

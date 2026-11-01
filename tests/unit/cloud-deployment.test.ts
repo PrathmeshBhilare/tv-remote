@@ -49,7 +49,7 @@ class MockDirectTransport implements ITransportConnection {
 }
 
 test('Direct Client Connection - PIN code requested and verified on TV', async () => {
-  let mockTransport: MockDirectTransport | null = null;
+  let mockTransport: any = null;
   const adapter = new LGWebOSTVAdapter(() => {
     mockTransport = new MockDirectTransport();
     return mockTransport;
@@ -108,3 +108,4 @@ test('Direct Client Connection - PIN code requested and verified on TV', async (
   assert.equal(pinResult.success, true);
   assert.equal(pinResult.clientKey, 'paired-secret-client-key-xyz');
 });
+

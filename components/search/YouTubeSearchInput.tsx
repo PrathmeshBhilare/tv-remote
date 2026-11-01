@@ -4,18 +4,18 @@ import React, { useState, useEffect } from 'react';
 import {
   Search,
   Play,
-  PlaySquare,
   Clock,
   Trash2,
-  Info,
   CheckCircle2,
   AlertCircle,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Send,
   CornerDownLeft,
-  ArrowLeft,
+  Tv,
+  X,
   Keyboard,
 } from 'lucide-react';
 import { useTV } from '../../src/hooks/use-tv';
@@ -31,25 +31,80 @@ interface VideoResult {
 
 export const YouTubeSearchInput: React.FC = () => {
   const {
+    currentProfile,
     launchApp,
     pressKey,
     sendTextToTV,
+    sendEnterToTV,
     connectionState,
     openConnectModal,
   } = useTV();
 
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isSendingToTV, setIsSendingToTV] = useState(false);
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<VideoResult[]>([]);
   const [statusResult, setStatusResult] = useState<{ success: boolean; message: string } | null>(null);
   const [history, setHistory] = useState<string[]>([]);
 
+  const isConnected = connectionState === 'connected';
+
   useEffect(() => {
     setHistory(TVProfileStorage.getSearchHistory());
   }, []);
 
-  // 1. Search YouTube videos to play directly on TV
+  // 1. Submit text directly into YouTube on-screen search field on TV
+  const handleSendTextToTV = async (targetQuery?: string) => {
+    const q = targetQuery !== undefined ? targetQuery : query;
+    if (!q.trim()) return;
+
+    if (!isConnected) {
+      openConnectModal();
+      return;
+    }
+
+    setIsSendingToTV(true);
+    setStatusResult(null);
+
+    try {
+      // Send text to active TV input
+      const res = await sendTextToTV(q.trim());
+      if (res.success) {
+        TVProfileStorage.addSearchQuery(q.trim());
+        setHistory(TVProfileStorage.getSearchHistory());
+        setStatusResult({
+          success: true,
+          message: `Sent "${q.trim()}" to TV. Press Enter to search on TV.`,
+        });
+      } else {
+        setStatusResult({
+          success: false,
+          message: res.error?.message || 'Could not send text to TV. Ensure search box is open.',
+        });
+      }
+    } catch (err) {
+      setStatusResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Text submission failed',
+      });
+    } finally {
+      setIsSendingToTV(false);
+    }
+  };
+
+  // 2. Send Enter key to submit on TV
+  const handleSendEnter = async () => {
+    if (!isConnected) {
+      openConnectModal();
+      return;
+    }
+    await sendEnterToTV();
+    await pressKey('ENTER');
+    setStatusResult({ success: true, message: 'Sent Enter key to TV.' });
+  };
+
+  // 3. Search and play directly
   const handleSearchVideos = async (targetQuery?: string) => {
     const q = targetQuery !== undefined ? targetQuery : query;
     if (!q.trim() || isSearching) return;
@@ -82,9 +137,9 @@ export const YouTubeSearchInput: React.FC = () => {
     }
   };
 
-  // 2. Play a specific video directly in the YouTube TV app
+  // 4. Play video on TV directly
   const handlePlayOnTV = async (video: VideoResult) => {
-    if (connectionState !== 'connected') {
+    if (!isConnected) {
       openConnectModal();
       return;
     }
@@ -118,57 +173,6 @@ export const YouTubeSearchInput: React.FC = () => {
     }
   };
 
-  // 3. Quick play top matching result
-  const handleInstantPlayFirst = async () => {
-    if (!query.trim()) return;
-    setIsSearching(true);
-    setStatusResult(null);
-
-    try {
-      const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(query.trim())}`);
-      const data = await res.json();
-
-      if (data.success && data.videos && data.videos.length > 0) {
-        setSearchResults(data.videos);
-        const topVideo = data.videos[0];
-        await handlePlayOnTV(topVideo);
-      } else {
-        setStatusResult({ success: false, message: 'No matching videos found.' });
-      }
-    } catch {
-      setStatusResult({ success: false, message: 'Failed to find video.' });
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // 4. Send text to system apps (Browser, Search dialogs)
-  const handleSendRawText = async () => {
-    if (connectionState !== 'connected') {
-      openConnectModal();
-      return;
-    }
-    if (!query.trim()) return;
-
-    setStatusResult(null);
-    try {
-      const res = await sendTextToTV(query.trim());
-      if (res.success) {
-        setStatusResult({
-          success: true,
-          message: `Sent "${query.trim()}" to active TV input field.`,
-        });
-      } else {
-        setStatusResult({
-          success: false,
-          message: res.error?.message || 'Could not send text to TV.',
-        });
-      }
-    } catch {
-      setStatusResult({ success: false, message: 'Text input failed.' });
-    }
-  };
-
   const handleClearHistory = () => {
     TVProfileStorage.clearSearchHistory();
     setHistory([]);
@@ -176,33 +180,60 @@ export const YouTubeSearchInput: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-4 w-full max-w-sm px-4 select-none pb-8 animate-fadeIn">
-      {/* Title */}
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-bold text-tv-textPrimary flex items-center gap-2">
-          <Search className="w-5 h-5 text-red-500" />
-          YouTube Search &amp; Play
+      {/* Connected TV Indicator Header */}
+      <div className="flex items-center justify-between p-3 bg-[#191A15] border border-[#2A2C23] rounded-2xl shadow-card">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-[#25261F] border border-[#36382E] flex items-center justify-center">
+            <Tv className="w-4 h-4 text-[#B6AD83]" />
+          </div>
+          <div className="flex flex-col text-left">
+            <span className="text-xs font-bold text-[#F1EEE3]">
+              {currentProfile?.name || 'LG Smart TV'}
+            </span>
+            <span className="text-[10px] text-[#737267] font-mono">
+              {currentProfile?.ip || '192.168.1.10'}
+            </span>
+          </div>
+        </div>
+
+        <span
+          className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${
+            isConnected
+              ? 'bg-[#8F9E6D]/15 text-[#D5CBA8] border border-[#8F9E6D]/30'
+              : 'bg-[#25261F] text-[#737267] border border-[#36382E]'
+          }`}
+        >
+          {isConnected ? 'Online' : 'Offline'}
+        </span>
+      </div>
+
+      {/* Title & Description */}
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-lg font-bold text-[#F1EEE3] flex items-center gap-2">
+          <Keyboard className="w-5 h-5 text-[#B6AD83]" />
+          <span>YouTube Search &amp; Typing</span>
         </h2>
-        <p className="text-xs text-tv-textSecondary leading-relaxed">
-          Search videos to play directly on your TV, or use TV navigation below.
+        <p className="text-xs text-[#A8A69A] leading-relaxed">
+          Type on your phone to send text directly into the YouTube search field on your TV.
         </p>
       </div>
 
-      {/* Search Input Form */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSearchVideos();
-        }}
-        className="flex flex-col gap-2.5"
-      >
+      {/* Large Luxury Search Input */}
+      <div className="flex flex-col gap-2.5">
         <div className="relative">
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. Abu Dhabi gp 2021"
-            disabled={isSearching}
-            className="w-full h-12 pl-4 pr-12 rounded-2xl bg-tv-surface border border-tv-border text-tv-textPrimary placeholder-tv-textMuted text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all font-medium"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSendTextToTV();
+              }
+            }}
+            placeholder="Type search query for TV..."
+            disabled={isSearching || isSendingToTV}
+            className="w-full h-13 pl-4 pr-12 rounded-2xl bg-[#191A15] border border-[#2A2C23] text-[#F1EEE3] placeholder-[#4A4B42] text-sm focus:outline-none focus:border-[#B6AD83] focus:ring-1 focus:ring-[#B6AD83]/30 transition-all font-medium shadow-card"
           />
           {query && (
             <button
@@ -211,67 +242,122 @@ export const YouTubeSearchInput: React.FC = () => {
                 setQuery('');
                 setSearchResults([]);
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-tv-textMuted hover:text-tv-textSecondary p-1 cursor-pointer"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-[#737267] hover:text-[#F1EEE3] transition-colors cursor-pointer"
             >
-              Clear
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Primary Action Buttons */}
-        <div className="flex gap-2">
+        {/* Action Buttons Row */}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Send text to active TV search box */}
           <button
             type="button"
-            disabled={!query.trim() || isSearching}
-            onClick={() => handleSearchVideos()}
-            className="flex-1 h-11 rounded-2xl bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-remoteButton transition-all disabled:opacity-40 cursor-pointer"
+            disabled={!query.trim() || isSendingToTV}
+            onClick={() => handleSendTextToTV()}
+            className="h-11 rounded-2xl bg-[#B6AD83] hover:bg-[#C4BB91] active:bg-[#9E956C] text-[#10110E] font-bold text-xs flex items-center justify-center gap-2 shadow-card transition-all disabled:opacity-40 cursor-pointer"
           >
-            {isSearching ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            {isSendingToTV ? (
+              <div className="w-4 h-4 border-2 border-[#10110E]/30 border-t-[#10110E] rounded-full animate-spin" />
             ) : (
               <>
-                <Search className="w-3.5 h-3.5" />
-                <span>Search Videos</span>
+                <Send className="w-3.5 h-3.5" />
+                <span>Send to TV</span>
               </>
             )}
           </button>
 
+          {/* Search videos to play directly */}
           <button
             type="button"
             disabled={!query.trim() || isSearching}
-            onClick={handleInstantPlayFirst}
-            className="px-4 h-11 rounded-2xl bg-tv-surface hover:bg-tv-surfaceHover active:bg-tv-surfaceActive border border-tv-border text-tv-textPrimary font-semibold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer"
-            title="Instantly play top matching video on TV"
+            onClick={() => handleSearchVideos()}
+            className="h-11 rounded-2xl bg-[#25261F] hover:bg-[#2F3127] border border-[#36382E] text-[#F1EEE3] font-semibold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer shadow-remoteButton"
           >
-            <Play className="w-3.5 h-3.5 text-red-500 fill-red-500" />
-            <span>Instant Play</span>
+            {isSearching ? (
+              <div className="w-4 h-4 border-2 border-[#F1EEE3]/30 border-t-[#F1EEE3] rounded-full animate-spin" />
+            ) : (
+              <>
+                <Search className="w-3.5 h-3.5 text-[#B6AD83]" />
+                <span>Search Videos</span>
+              </>
+            )}
           </button>
         </div>
-      </form>
+
+        {/* Enter Key Action Bar */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleSendEnter}
+            disabled={!isConnected}
+            className="flex-1 h-9 rounded-xl bg-[#191A15] hover:bg-[#20221B] border border-[#2A2C23] text-xs font-medium text-[#F1EEE3] flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40"
+          >
+            <CornerDownLeft className="w-3.5 h-3.5 text-[#B6AD83]" />
+            <span>Press Enter on TV</span>
+          </button>
+        </div>
+      </div>
 
       {/* Result Status Banner */}
       {statusResult && (
         <div
           className={`p-3 rounded-2xl border text-xs flex items-center gap-2.5 animate-fadeIn ${
             statusResult.success
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-              : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+              ? 'bg-[#8F9E6D]/15 border-[#8F9E6D]/30 text-[#D5CBA8]'
+              : 'bg-[#C95D53]/15 border-[#C95D53]/30 text-[#C95D53]'
           }`}
         >
           {statusResult.success ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-[#8F9E6D] shrink-0" />
           ) : (
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-[#C95D53] shrink-0" />
           )}
           <span className="leading-snug">{statusResult.message}</span>
         </div>
       )}
 
-      {/* Search Results List (Tap to Play on TV) */}
+      {/* Recent Search History Chips */}
+      {history.length > 0 && (
+        <div className="flex flex-col gap-2 pt-1">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] uppercase tracking-wider text-[#737267] font-semibold flex items-center gap-1.5">
+              <Clock className="w-3 h-3 text-[#B6AD83]" />
+              Recent Searches
+            </span>
+            <button
+              type="button"
+              onClick={handleClearHistory}
+              className="text-[10px] text-[#737267] hover:text-[#C95D53] flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Clear</span>
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {history.slice(0, 8).map((term, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => {
+                  setQuery(term);
+                  handleSendTextToTV(term);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-[#191A15] hover:bg-[#25261F] border border-[#2A2C23] text-xs text-[#A8A69A] hover:text-[#F1EEE3] transition-colors cursor-pointer"
+              >
+                {term}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Direct Video Results List */}
       {searchResults.length > 0 && (
         <div className="flex flex-col gap-2 mt-1">
-          <span className="text-xs font-semibold text-tv-textSecondary flex items-center gap-1.5 px-1">
-            <PlaySquare className="w-3.5 h-3.5 text-red-500" />
+          <span className="text-xs font-semibold text-[#A8A69A] px-1">
             Tap to Play on TV:
           </span>
           <div className="flex flex-col gap-2">
@@ -281,10 +367,9 @@ export const YouTubeSearchInput: React.FC = () => {
                 type="button"
                 onClick={() => handlePlayOnTV(video)}
                 disabled={isPlaying === video.id}
-                className="w-full p-2.5 rounded-2xl bg-tv-surface hover:bg-tv-surfaceHover active:bg-tv-surfaceActive border border-tv-border text-left flex items-center gap-3 transition-all cursor-pointer group"
+                className="w-full p-2.5 rounded-2xl bg-[#191A15] hover:bg-[#20221B] active:bg-[#25261F] border border-[#2A2C23] text-left flex items-center gap-3 transition-all cursor-pointer group shadow-card"
               >
-                {/* Thumbnail */}
-                <div className="relative w-20 h-12 rounded-lg bg-black/40 overflow-hidden shrink-0 border border-white/5">
+                <div className="relative w-18 h-12 rounded-xl bg-[#25261F] overflow-hidden shrink-0 border border-white/5">
                   {video.thumbnailUrl ? (
                     <img
                       src={video.thumbnailUrl}
@@ -293,30 +378,28 @@ export const YouTubeSearchInput: React.FC = () => {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <Play className="w-4 h-4 text-red-500 fill-red-500" />
+                      <Play className="w-4 h-4 text-[#B6AD83]" />
                     </div>
                   )}
                   {video.duration && (
-                    <span className="absolute bottom-1 right-1 px-1 rounded bg-black/80 text-[9px] font-mono text-white/90">
+                    <span className="absolute bottom-1 right-1 px-1 rounded bg-black/80 text-[8px] font-mono text-white/90">
                       {video.duration}
                     </span>
                   )}
                 </div>
 
-                {/* Info */}
                 <div className="flex flex-col flex-1 min-w-0 pr-1">
-                  <span className="text-xs font-semibold text-tv-textPrimary line-clamp-2 leading-snug group-hover:text-red-400 transition-colors">
+                  <span className="text-xs font-semibold text-[#F1EEE3] line-clamp-2 leading-snug group-hover:text-[#D5CBA8] transition-colors">
                     {video.title}
                   </span>
-                  <span className="text-[11px] text-tv-textMuted truncate mt-0.5">
+                  <span className="text-[10px] text-[#737267] truncate mt-0.5">
                     {video.channel}
                   </span>
                 </div>
 
-                {/* Play Button Icon */}
-                <div className="w-8 h-8 rounded-full bg-red-500/10 group-hover:bg-red-500 text-red-400 group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
+                <div className="w-8 h-8 rounded-full bg-[#25261F] group-hover:bg-[#B6AD83] text-[#B6AD83] group-hover:text-[#10110E] flex items-center justify-center shrink-0 transition-colors">
                   {isPlaying === video.id ? (
-                    <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
                   )}
@@ -327,48 +410,42 @@ export const YouTubeSearchInput: React.FC = () => {
         </div>
       )}
 
-      {/* TV Screen Navigation D-Pad (For In-App TV Keyboard) */}
-      <div className="flex flex-col gap-2 mt-2 p-3.5 rounded-2xl bg-tv-surface/60 border border-tv-border/80">
+      {/* Compact TV On-Screen Keyboard D-Pad Navigation */}
+      <div className="flex flex-col gap-2 mt-2 p-3.5 rounded-3xl bg-[#191A15] border border-[#2A2C23] shadow-card">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-tv-textSecondary flex items-center gap-1.5">
-            <Keyboard className="w-3.5 h-3.5 text-blue-400" />
-            TV Keyboard D-Pad Controls
+          <span className="text-xs font-semibold text-[#F1EEE3] flex items-center gap-1.5">
+            <Tv className="w-3.5 h-3.5 text-[#B6AD83]" />
+            On-Screen TV Keyboard D-Pad
           </span>
-          <span className="text-[10px] text-tv-textMuted">Navigate on TV</span>
+          <span className="text-[10px] text-[#737267]">Navigate on TV</span>
         </div>
 
-        <p className="text-[11px] text-tv-textMuted leading-relaxed">
-          Use these directional keys to select letters on the TV screen's on-screen keyboard:
+        <p className="text-[11px] text-[#737267] leading-relaxed">
+          If YouTube&apos;s on-screen keyboard is open on your TV, use these directional keys to select letters:
         </p>
 
-        {/* Compact D-Pad Controller */}
         <div className="flex flex-col items-center justify-center gap-1.5 py-1">
-          {/* UP */}
           <button
             type="button"
             onClick={() => pressKey('UP')}
-            className="w-12 h-10 rounded-xl bg-tv-surface hover:bg-tv-surfaceHover active:bg-tv-surfaceActive border border-tv-border flex items-center justify-center text-tv-textPrimary transition-all cursor-pointer shadow-sm"
-            title="Up"
+            className="w-12 h-10 rounded-xl bg-[#25261F] hover:bg-[#2F3127] border border-[#36382E] flex items-center justify-center text-[#F1EEE3] transition-colors cursor-pointer"
           >
-            <ChevronUp className="w-4 h-4" />
+            <ChevronUp className="w-5 h-5 text-[#B6AD83]" />
           </button>
 
-          {/* LEFT - OK - RIGHT */}
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => pressKey('LEFT')}
-              className="w-12 h-10 rounded-xl bg-tv-surface hover:bg-tv-surfaceHover active:bg-tv-surfaceActive border border-tv-border flex items-center justify-center text-tv-textPrimary transition-all cursor-pointer shadow-sm"
-              title="Left"
+              className="w-12 h-10 rounded-xl bg-[#25261F] hover:bg-[#2F3127] border border-[#36382E] flex items-center justify-center text-[#F1EEE3] transition-colors cursor-pointer"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-5 h-5 text-[#B6AD83]" />
             </button>
 
             <button
               type="button"
               onClick={() => pressKey('ENTER')}
-              className="w-16 h-10 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs flex items-center justify-center transition-all cursor-pointer shadow-sm"
-              title="OK / Select Letter on TV"
+              className="w-14 h-10 rounded-xl bg-[#10110E] hover:bg-[#1C1D17] border border-[#B6AD83]/40 flex items-center justify-center text-xs font-bold text-[#F1EEE3] transition-colors cursor-pointer shadow-sm"
             >
               OK
             </button>
@@ -376,97 +453,21 @@ export const YouTubeSearchInput: React.FC = () => {
             <button
               type="button"
               onClick={() => pressKey('RIGHT')}
-              className="w-12 h-10 rounded-xl bg-tv-surface hover:bg-tv-surfaceHover active:bg-tv-surfaceActive border border-tv-border flex items-center justify-center text-tv-textPrimary transition-all cursor-pointer shadow-sm"
-              title="Right"
+              className="w-12 h-10 rounded-xl bg-[#25261F] hover:bg-[#2F3127] border border-[#36382E] flex items-center justify-center text-[#F1EEE3] transition-colors cursor-pointer"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-5 h-5 text-[#B6AD83]" />
             </button>
           </div>
 
-          {/* DOWN */}
           <button
             type="button"
             onClick={() => pressKey('DOWN')}
-            className="w-12 h-10 rounded-xl bg-tv-surface hover:bg-tv-surfaceHover active:bg-tv-surfaceActive border border-tv-border flex items-center justify-center text-tv-textPrimary transition-all cursor-pointer shadow-sm"
-            title="Down"
+            className="w-12 h-10 rounded-xl bg-[#25261F] hover:bg-[#2F3127] border border-[#36382E] flex items-center justify-center text-[#F1EEE3] transition-colors cursor-pointer"
           >
-            <ChevronDown className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Bottom Helper Actions */}
-        <div className="flex items-center gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => pressKey('BACK')}
-            className="flex-1 h-9 rounded-xl bg-tv-surface hover:bg-tv-surfaceHover active:bg-tv-surfaceActive border border-tv-border text-tv-textSecondary hover:text-tv-textPrimary text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => pressKey('ENTER')}
-            className="flex-1 h-9 rounded-xl bg-tv-surface hover:bg-tv-surfaceHover active:bg-tv-surfaceActive border border-tv-border text-tv-textSecondary hover:text-tv-textPrimary text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-          >
-            <CornerDownLeft className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Select / OK</span>
+            <ChevronDown className="w-5 h-5 text-[#B6AD83]" />
           </button>
         </div>
       </div>
-
-      {/* Helpful Technical Explanation Card */}
-      <div className="bg-tv-surface/40 border border-tv-border/60 rounded-xl p-3 flex flex-col gap-1.5 text-[11px] text-tv-textMuted leading-relaxed">
-        <p className="flex items-center gap-1.5 font-medium text-tv-textSecondary">
-          <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-          Why text input differs on YouTube:
-        </p>
-        <p>
-          The YouTube TV app uses an internal locked on-screen keyboard that ignores external phone text typing (this is an intentional restriction by Google/YouTube on Smart TVs).
-        </p>
-        <p>
-          • <strong>To play videos:</strong> Search above and tap any video to launch it directly on your TV.
-        </p>
-        <p>
-          • <strong>To use the on-screen keyboard:</strong> Use the D-Pad above to move and select letters on the TV screen.
-        </p>
-      </div>
-
-      {/* Recent Searches */}
-      {history.length > 0 && (
-        <div className="flex flex-col gap-2 mt-1">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-xs text-tv-textMuted font-medium flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              Recent Searches
-            </span>
-            <button
-              type="button"
-              onClick={handleClearHistory}
-              className="text-[11px] text-tv-textMuted hover:text-rose-400 flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <Trash2 className="w-3 h-3" />
-              Clear
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {history.map((item, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => {
-                  setQuery(item);
-                  handleSearchVideos(item);
-                }}
-                className="px-3 py-1.5 rounded-xl bg-tv-surface hover:bg-tv-surfaceHover active:bg-tv-surfaceActive border border-tv-border text-xs text-tv-textSecondary hover:text-tv-textPrimary transition-all cursor-pointer"
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

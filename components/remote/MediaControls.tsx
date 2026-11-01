@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Play, Pause, Square, RotateCcw, RotateCw } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Square } from 'lucide-react';
 import { RemoteActionButton } from './RemoteActionButton';
 import { useTV } from '../../src/hooks/use-tv';
 
@@ -10,30 +10,30 @@ export const MediaControls: React.FC = () => {
   const isConnected = connectionState === 'connected';
 
   return (
-    <div className="flex flex-col items-center gap-3 w-64 bg-tv-surface/60 border border-tv-border/80 rounded-3xl p-3 px-4 shadow-remoteButton">
+    <div className="flex flex-col items-center gap-3 w-full max-w-[290px] bg-[#191A15] border border-[#2A2C23] rounded-3xl p-3 px-4 shadow-remoteButton">
       <div className="flex items-center justify-between w-full">
-        {/* Rewind */}
+        {/* Previous / Rewind */}
         <RemoteActionButton
           onClick={mediaRewind}
-          ariaLabel="Rewind"
-          variant="secondary"
+          ariaLabel="Previous / Rewind"
+          variant="primary"
           size="sm"
           disabled={!isConnected}
-          className="rounded-xl w-10 h-10"
+          className="rounded-2xl w-10 h-10 border border-[#36382E]"
         >
-          <RotateCcw className="w-4 h-4 text-tv-textSecondary" />
+          <SkipBack className="w-4 h-4 text-[#A8A69A]" />
         </RemoteActionButton>
 
         {/* Play */}
         <RemoteActionButton
           onClick={mediaPlay}
           ariaLabel="Play"
-          variant="primary"
+          variant="accent"
           size="md"
           disabled={!isConnected}
           className="rounded-2xl w-12 h-12"
         >
-          <Play className="w-5 h-5 text-tv-textPrimary fill-tv-textPrimary" />
+          <Play className="w-5 h-5 text-[#10110E] fill-[#10110E] ml-0.5" />
         </RemoteActionButton>
 
         {/* Pause */}
@@ -43,39 +43,39 @@ export const MediaControls: React.FC = () => {
           variant="primary"
           size="md"
           disabled={!isConnected}
-          className="rounded-2xl w-12 h-12"
+          className="rounded-2xl w-12 h-12 border border-[#36382E]"
         >
-          <Pause className="w-5 h-5 text-tv-textPrimary fill-tv-textPrimary" />
+          <Pause className="w-5 h-5 text-[#F1EEE3] fill-[#F1EEE3]" />
         </RemoteActionButton>
 
-        {/* Fast Forward */}
+        {/* Next / Fast Forward */}
         <RemoteActionButton
           onClick={mediaFastForward}
-          ariaLabel="Fast Forward"
-          variant="secondary"
+          ariaLabel="Next / Fast Forward"
+          variant="primary"
           size="sm"
           disabled={!isConnected}
-          className="rounded-xl w-10 h-10"
+          className="rounded-2xl w-10 h-10 border border-[#36382E]"
         >
-          <RotateCw className="w-4 h-4 text-tv-textSecondary" />
+          <SkipForward className="w-4 h-4 text-[#A8A69A]" />
         </RemoteActionButton>
 
         {/* Stop */}
         <RemoteActionButton
           onClick={mediaStop}
           ariaLabel="Stop"
-          variant="secondary"
+          variant="primary"
           size="sm"
           disabled={!isConnected}
-          className="rounded-xl w-10 h-10"
+          className="rounded-2xl w-10 h-10 border border-[#36382E]"
         >
-          <Square className="w-4 h-4 text-tv-textSecondary fill-tv-textSecondary" />
+          <Square className="w-3.5 h-3.5 text-[#A8A69A] fill-[#A8A69A]" />
         </RemoteActionButton>
       </div>
 
-      <p className="text-[10px] text-center text-tv-textMuted px-2">
-        Note: Media command compatibility depends on the active TV app. DRM-protected apps (like Netflix) may ignore or restrict remote media keys.
-      </p>
+      <span className="text-[10px] text-center text-[#737267] font-medium leading-tight">
+        Playback keys for webOS media &amp; player apps
+      </span>
     </div>
   );
 };

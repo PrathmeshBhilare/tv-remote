@@ -14,34 +14,35 @@ export const ConnectionBadge: React.FC<ConnectionBadgeProps> = ({ state, tvName,
     switch (state) {
       case 'connected':
         return {
-          bg: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
-          dot: 'bg-emerald-500 animate-pulse',
+          bg: 'bg-[#8F9E6D]/15 border-[#8F9E6D]/35 text-[#D5CBA8]',
+          dot: 'bg-[#8F9E6D]',
           label: tvName || 'Connected',
         };
       case 'connecting':
       case 'reconnecting':
         return {
-          bg: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
-          dot: 'bg-amber-500 animate-ping',
+          bg: 'bg-[#B6AD83]/15 border-[#B6AD83]/30 text-[#D5CBA8]',
+          dot: 'bg-[#B6AD83] animate-pulse',
           label: 'Connecting...',
         };
       case 'pairing_prompt':
+      case 'pairing_pin':
         return {
-          bg: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400',
-          dot: 'bg-indigo-500 animate-bounce',
-          label: 'Accept on TV',
+          bg: 'bg-[#D5CBA8]/15 border-[#D5CBA8]/35 text-[#F1EEE3]',
+          dot: 'bg-[#D5CBA8] animate-ping',
+          label: 'Pairing...',
         };
       case 'error':
         return {
-          bg: 'bg-rose-500/10 border-rose-500/30 text-rose-400',
-          dot: 'bg-rose-500',
+          bg: 'bg-[#C95D53]/15 border-[#C95D53]/35 text-[#C95D53]',
+          dot: 'bg-[#C95D53]',
           label: 'Connection Error',
         };
       case 'disconnected':
       default:
         return {
-          bg: 'bg-slate-800/60 border-slate-700 text-slate-400',
-          dot: 'bg-slate-500',
+          bg: 'bg-[#191A15] border-[#2A2C23] text-[#737267]',
+          dot: 'bg-[#4A4B42]',
           label: 'Not Connected',
         };
     }
@@ -52,13 +53,13 @@ export const ConnectionBadge: React.FC<ConnectionBadgeProps> = ({ state, tvName,
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium tracking-wide transition-colors ${config.bg} ${
-        onClick ? 'hover:brightness-125 cursor-pointer active:scale-95' : 'cursor-default'
+      type="button"
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] font-medium tracking-wide transition-all ${config.bg} ${
+        onClick ? 'hover:border-[#B6AD83]/50 cursor-pointer active:scale-95' : 'cursor-default'
       }`}
     >
       <span className={`w-2 h-2 rounded-full ${config.dot}`} />
-      <span>{config.label}</span>
+      <span className="truncate max-w-[120px]">{config.label}</span>
     </button>
   );
 };
-

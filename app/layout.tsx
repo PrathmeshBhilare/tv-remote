@@ -4,9 +4,9 @@ import { TVProvider } from '../src/hooks/use-tv';
 import { PWARegister } from '../components/pwa/PWARegister';
 
 export const metadata: Metadata = {
-  title: 'Lumina Remote | Smart webOS TV Controller',
+  title: 'LG Control | Smart TV Remote',
   description:
-    'Ultra-fast progressive web app remote for LG webOS Smart TVs. Control volume, navigation, channels, and YouTube directly from your phone.',
+    'Premium Smart TV Remote for LG webOS TVs. Elegant volume, navigation, quick apps, and typing control.',
   manifest: '/manifest.json',
   icons: {
     icon: [
@@ -20,10 +20,10 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Lumina',
+    title: 'LG Control',
   },
-  applicationName: 'Lumina Remote',
-  keywords: ['LG TV Remote', 'webOS Remote', 'Smart TV Controller', 'PWA Remote', 'Lumina'],
+  applicationName: 'LG Control',
+  keywords: ['LG Control', 'LG TV Remote', 'webOS Remote', 'Smart TV Controller', 'PWA Remote'],
 };
 
 export const viewport: Viewport = {
@@ -32,7 +32,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#0B0E17',
+  themeColor: '#10110E',
 };
 
 export default function RootLayout({
@@ -47,7 +47,7 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
-      <body className="bg-tv-bg text-tv-textPrimary min-h-screen flex flex-col items-center justify-start antialiased selection:bg-cyan-500/20 selection:text-cyan-200">
+      <body className="bg-tv-bg text-tv-textPrimary min-h-screen flex flex-col items-center justify-start antialiased selection:bg-[#B6AD83]/20 selection:text-[#F1EEE3]">
         <PWARegister />
         <TVProvider>{children}</TVProvider>
       </body>

@@ -3,6 +3,8 @@ import os from 'os';
 import net from 'net';
 import dgram from 'dgram';
 
+export const dynamic = 'force-dynamic';
+
 // Fast TCP probe to check if TV SSAP port is open
 function probePort(ip: string, port = 3001, timeoutMs = 600): Promise<boolean> {
   return new Promise((resolve) => {

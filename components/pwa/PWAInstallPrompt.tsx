@@ -6,9 +6,6 @@ import {
   Share,
   PlusSquare,
   X,
-  ChevronUp,
-  Sparkles,
-  Smartphone,
   Tv,
 } from 'lucide-react';
 
@@ -19,16 +16,15 @@ interface BeforeInstallPromptEvent extends Event {
 
 export const PWAInstallPrompt: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isStandalone, setIsStandalone] = useState(true); // default true to avoid flash on mount
+  const [isStandalone, setIsStandalone] = useState(true);
   const [isIOS, setIsIOS] = useState(false);
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
   const [installedSuccessfully, setInstalledSuccessfully] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Check if app is running as installed PWA (standalone)
     const checkStandalone = () => {
       const isStandaloneMode =
         window.matchMedia('(display-mode: standalone)').matches ||
@@ -40,23 +36,19 @@ export const PWAInstallPrompt: React.FC = () => {
 
     checkStandalone();
 
-    // Detect iOS
     const ua = window.navigator.userAgent.toLowerCase();
     const isAppleDevice = /iphone|ipad|ipod/.test(ua);
     setIsIOS(isAppleDevice);
 
-    // Listen for beforeinstallprompt event (Android / Chromium)
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
 
-    // Listen for successful installation
     const handleAppInstalled = () => {
       setInstalledSuccessfully(true);
       setDeferredPrompt(null);
       setIsStandalone(true);
-      console.log('[Lumina PWA] App successfully installed!');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -68,8 +60,7 @@ export const PWAInstallPrompt: React.FC = () => {
     };
   }, []);
 
-  // If already running in standalone mode or installed, don't show the prompt
-  if (isStandalone || installedSuccessfully) {
+  if (isStandalone || installedSuccessfully || isDismissed) {
     return null;
   }
 
@@ -80,170 +71,96 @@ export const PWAInstallPrompt: React.FC = () => {
     }
 
     if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      if (choice.outcome === 'accepted') {
+      deferredPrompt.prompt();
+      const choiceResult = await deferredPrompt.userChoice;
+      if (choiceResult.outcome === 'accepted') {
         setInstalledSuccessfully(true);
-        setDeferredPrompt(null);
       }
-    } else {
-      // If browser doesn't support deferred prompt (e.g. desktop safari/firefox)
-      setShowIOSInstructions(true);
+      setDeferredPrompt(null);
     }
   };
 
-  // Minimized state: sleek floating pill button
-  if (isMinimized) {
-    return (
-      <div className="fixed bottom-20 right-4 z-40 animate-fadeIn">
-        <button
-          type="button"
-          onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-gradient-to-r from-cyan-500/90 to-blue-600/90 text-white text-xs font-semibold shadow-lg shadow-cyan-500/20 hover:scale-105 active:scale-95 transition-all border border-cyan-400/40 cursor-pointer"
-        >
-          <Download className="w-3.5 h-3.5 animate-bounce" />
-          <span>Install App</span>
-        </button>
-      </div>
-    );
-  }
-
   return (
     <>
-      {/* Floating PWA Install Banner */}
-      <aside aria-label="Install Lumina Remote Web App" className="fixed bottom-20 left-4 right-4 max-w-sm mx-auto z-40 animate-slideUp">
-        <div className="relative p-3.5 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-cyan-500/40 shadow-2xl shadow-cyan-950/60 flex flex-col gap-3">
-          {/* Top row: Icon, text, minimize */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              {/* App Icon */}
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 p-0.5 shadow-md shadow-cyan-500/30 flex items-center justify-center shrink-0">
-                <div className="w-full h-full rounded-[10px] bg-slate-950 flex items-center justify-center">
-                  <Tv className="w-5 h-5 text-cyan-400" />
-                </div>
-              </div>
-
-              {/* Title & Desc */}
-              <div className="flex flex-col">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-white tracking-wide">
-                    Install Lumina Remote
-                  </span>
-                  <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[9px] font-semibold border border-cyan-500/30">
-                    <Sparkles className="w-2.5 h-2.5" /> PWA
-                  </span>
-                </div>
-                <span className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                  Install for 1-tap instant launch &amp; full screen remote.
+      {/* Floating Bottom Install Banner */}
+      <div className="fixed bottom-16 left-0 right-0 z-40 px-4 max-w-md mx-auto pointer-events-none animate-fadeIn">
+        <div className="bg-[#191A15]/95 backdrop-blur-md border border-[#2A2C23] shadow-card rounded-2xl p-3 flex items-center justify-between pointer-events-auto">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#25261F] border border-[#36382E] flex items-center justify-center shrink-0">
+              <Tv className="w-5 h-5 text-[#B6AD83]" />
+            </div>
+            <div className="flex flex-col text-left">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-[#F1EEE3]">LG Control</span>
+                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-[#B6AD83]/15 text-[#D5CBA8] font-semibold">
+                  App
                 </span>
               </div>
+              <span className="text-[10px] text-[#A8A69A]">Install for fullscreen remote</span>
             </div>
-
-            {/* Minimize button */}
-            <button
-              type="button"
-              onClick={() => setIsMinimized(true)}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-              title="Minimize"
-              aria-label="Minimize install banner"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
 
-          {/* Action Row */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleInstallClick}
-              className="flex-1 h-9 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-[0.98] text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/25 transition-all cursor-pointer"
+              className="h-8 px-3 rounded-xl bg-[#B6AD83] hover:bg-[#C4BB91] text-[#10110E] text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>{isIOS ? 'Install on iPhone / iPad' : 'Download Web App'}</span>
+              <span>Install</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setIsMinimized(true)}
-              className="px-3 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
+              onClick={() => setIsDismissed(true)}
+              className="p-1.5 rounded-lg text-[#737267] hover:text-[#F1EEE3] transition-colors cursor-pointer"
             >
-              Later
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
-      </aside>
+      </div>
 
-      {/* iOS / Safari Step-by-Step Instructions Modal */}
+      {/* iOS Add to Home Screen Instructions Modal */}
       {showIOSInstructions && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-fadeIn">
-          <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-700/80 p-5 shadow-2xl flex flex-col gap-4 animate-slideUp">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end justify-center p-4">
+          <div className="w-full max-w-md bg-[#191A15] border border-[#2A2C23] rounded-3xl p-5 flex flex-col gap-4 text-left shadow-2xl animate-fadeIn">
+            <div className="flex items-center justify-between border-b border-[#2A2C23] pb-3">
               <div className="flex items-center gap-2">
-                <Smartphone className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-sm font-bold text-white">How to Install on iPhone</h3>
+                <Tv className="w-5 h-5 text-[#B6AD83]" />
+                <h3 className="text-sm font-bold text-[#F1EEE3]">Install LG Control on iPhone</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowIOSInstructions(false)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-white bg-slate-800/80 cursor-pointer"
+                className="p-1 rounded-full text-[#737267] hover:text-[#F1EEE3] transition-colors cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Steps list */}
-            <div className="flex flex-col gap-3 py-1 text-xs text-slate-300">
-              <div className="flex items-start gap-3 p-3 rounded-2xl bg-slate-800/60 border border-slate-700/50">
-                <div className="w-7 h-7 rounded-full bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center shrink-0">
-                  1
+            <div className="flex flex-col gap-3 text-xs text-[#A8A69A]">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-[#25261F] flex items-center justify-center shrink-0">
+                  <Share className="w-4 h-4 text-[#B6AD83]" />
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-semibold text-white flex items-center gap-1.5">
-                    Tap the Share Button
-                    <Share className="w-3.5 h-3.5 text-blue-400 inline" />
-                  </span>
-                  <span className="text-[11px] text-slate-400">
-                    Located in Safari&apos;s bottom navigation bar (the square with an arrow pointing up).
-                  </span>
-                </div>
+                <span>1. Tap the <strong>Share</strong> button at the bottom of Safari.</span>
               </div>
 
-              <div className="flex items-start gap-3 p-3 rounded-2xl bg-slate-800/60 border border-slate-700/50">
-                <div className="w-7 h-7 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0">
-                  2
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-[#25261F] flex items-center justify-center shrink-0">
+                  <PlusSquare className="w-4 h-4 text-[#B6AD83]" />
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-semibold text-white flex items-center gap-1.5">
-                    Tap &quot;Add to Home Screen&quot;
-                    <PlusSquare className="w-3.5 h-3.5 text-cyan-400 inline" />
-                  </span>
-                  <span className="text-[11px] text-slate-400">
-                    Scroll down the share options list and choose &quot;Add to Home Screen&quot;.
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 rounded-2xl bg-slate-800/60 border border-slate-700/50">
-                <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center shrink-0">
-                  3
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-semibold text-white">Tap &quot;Add&quot;</span>
-                  <span className="text-[11px] text-slate-400">
-                    Confirm in the top right corner. Lumina Remote will appear on your Home Screen!
-                  </span>
-                </div>
+                <span>2. Scroll down and tap <strong>Add to Home Screen</strong>.</span>
               </div>
             </div>
 
-            {/* Close CTA */}
             <button
               type="button"
               onClick={() => setShowIOSInstructions(false)}
-              className="w-full h-11 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-semibold text-xs transition-all cursor-pointer"
+              className="w-full h-10 rounded-xl bg-[#25261F] border border-[#36382E] text-[#F1EEE3] font-medium text-xs transition-colors cursor-pointer"
             >
-              Got It
+              Got it
             </button>
           </div>
         </div>
@@ -251,4 +168,3 @@ export const PWAInstallPrompt: React.FC = () => {
     </>
   );
 };
-

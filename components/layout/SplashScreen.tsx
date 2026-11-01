@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Tv, Sparkles, Wifi } from 'lucide-react';
+import { Tv } from 'lucide-react';
 
 interface SplashScreenProps {
   onFinish?: () => void;
@@ -10,25 +10,25 @@ interface SplashScreenProps {
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [isFadingOut, setIsFadingOut] = useState(false);
-  const [loadingStep, setLoadingStep] = useState('Initializing Lumina...');
+  const [loadingStep, setLoadingStep] = useState('Initializing LG Control...');
 
   useEffect(() => {
-    // Stage 1: Initializing
+    // Stage 1
     const timer1 = setTimeout(() => {
       setLoadingStep('Connecting to webOS...');
     }, 600);
 
-    // Stage 2: Ready
+    // Stage 2
     const timer2 = setTimeout(() => {
-      setLoadingStep('Ready!');
+      setLoadingStep('Ready');
       setIsFadingOut(true);
-    }, 1300);
+    }, 1200);
 
-    // Stage 3: Complete & Unmount
+    // Stage 3
     const timer3 = setTimeout(() => {
       setIsVisible(false);
       onFinish?.();
-    }, 1800);
+    }, 1600);
 
     return () => {
       clearTimeout(timer1);
@@ -41,15 +41,14 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-between py-12 px-6 bg-[#0B0E17] select-none transition-all duration-500 ease-out ${
-        isFadingOut ? 'opacity-0 scale-105 pointer-events-none' : 'opacity-100 scale-100'
+      className={`fixed inset-0 z-50 flex flex-col items-center justify-between py-14 px-6 bg-[#10110E] select-none transition-all duration-500 ease-out ${
+        isFadingOut ? 'opacity-0 scale-102 pointer-events-none' : 'opacity-100 scale-100'
       }`}
     >
-      {/* Ambient background glow */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-cyan-500/10 blur-[90px] pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-indigo-500/10 blur-[80px] pointer-events-none" />
+      {/* Subtle Warm Amber / Olive Ambient Backlight */}
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-[#B6AD83]/5 blur-[100px] pointer-events-none" />
 
-      {/* Top spacer */}
+      {/* Top Skip Button */}
       <div className="w-full flex justify-end">
         <button
           type="button"
@@ -58,62 +57,50 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
             setTimeout(() => {
               setIsVisible(false);
               onFinish?.();
-            }, 300);
+            }, 200);
           }}
-          className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors p-2 cursor-pointer"
+          className="text-xs text-[#737267] hover:text-[#A8A69A] transition-colors p-2 cursor-pointer"
         >
           Skip &rarr;
         </button>
       </div>
 
-      {/* Center Branding & Animated Icon */}
+      {/* Center Branding & Icon */}
       <div className="flex flex-col items-center gap-6 relative">
-        {/* Pulsing Concentric Wave Rings */}
+        {/* Refined Concentric Waves */}
         <div className="relative flex items-center justify-center">
-          <div className="absolute w-36 h-36 rounded-full border border-cyan-500/20 animate-ping opacity-30" />
-          <div className="absolute w-28 h-28 rounded-full border border-indigo-500/30 animate-pulse" />
+          <div className="absolute w-32 h-32 rounded-full border border-[#B6AD83]/10 animate-ping opacity-30" />
+          <div className="absolute w-24 h-24 rounded-full border border-[#D5CBA8]/15" />
 
-          {/* Main Glowing Badge */}
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-600 p-0.5 shadow-2xl shadow-cyan-500/30 flex items-center justify-center relative z-10">
-            <div className="w-full h-full rounded-[22px] bg-[#070A12] flex items-center justify-center relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-indigo-500/10" />
-              <Tv className="w-9 h-9 text-cyan-400 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)]" />
+          {/* Luxury Rounded Square Icon */}
+          <div className="w-20 h-20 rounded-3xl bg-[#191A15] border border-[#2A2C23] shadow-card flex items-center justify-center relative z-10 p-4">
+            <div className="relative flex items-center justify-center">
+              {/* Television Outline */}
+              <Tv className="w-10 h-10 text-[#F1EEE3] stroke-[1.75]" />
+              {/* Inner D-Pad Dot */}
+              <span className="absolute w-2.5 h-2.5 rounded-full bg-[#B6AD83]" />
             </div>
           </div>
         </div>
 
-        {/* Brand Text */}
-        <div className="flex flex-col items-center gap-1.5 text-center">
-          <h1 className="text-2xl font-black tracking-[0.25em] text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400 uppercase drop-shadow-sm">
-            LUMINA
+        {/* Brand Title */}
+        <div className="flex flex-col items-center text-center gap-1">
+          <h1 className="text-2xl font-bold tracking-tight text-[#F1EEE3]">
+            LG Control
           </h1>
-          <span className="text-xs text-slate-400 tracking-wider font-medium flex items-center gap-1.5">
-            <Sparkles className="w-3 h-3 text-cyan-400" />
-            Smart webOS Remote
-          </span>
+          <p className="text-xs text-[#A8A69A] tracking-wider uppercase font-medium">
+            Smart TV Remote
+          </p>
         </div>
       </div>
 
-      {/* Bottom Loading Spinner & Status */}
-      <div className="flex flex-col items-center gap-4 w-full max-w-xs">
-        {/* Modern Neon Arc Spinner */}
-        <div className="relative w-8 h-8 flex items-center justify-center">
-          <div className="absolute inset-0 rounded-full border-2 border-slate-800" />
-          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400 border-r-cyan-400 animate-spin" />
-          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.9)] animate-pulse" />
-        </div>
-
-        {/* Status Text with WiFi Icon */}
-        <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-          <Wifi className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-          <span className="animate-fadeIn">{loadingStep}</span>
-        </div>
-
-        <span className="text-[10px] text-slate-600 font-mono tracking-widest mt-2">
-          v1.0 • PWA Ready
+      {/* Bottom Loading Status & Fine Spinner */}
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-5 h-5 rounded-full border-2 border-[#2A2C23] border-t-[#B6AD83] animate-spin" />
+        <span className="text-[11px] font-mono text-[#737267]">
+          {loadingStep}
         </span>
       </div>
     </div>
   );
 };
-
