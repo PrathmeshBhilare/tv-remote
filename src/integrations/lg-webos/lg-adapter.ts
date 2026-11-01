@@ -9,10 +9,13 @@ import {
   TVCapabilities,
   ConnectionState,
 } from '../tv/types';
-import { SSAPClient, SSAPMessage } from './ssap-client';
+import { SSAPClient } from './ssap-client';
 import { PointerClient } from './pointer-client';
 import { LG_SSAP_URIS } from './commands';
-import { ITransportConnection } from '../../transport/transport';
+import { ITransportConnection, TransportError } from '../../transport/transport';
+import { NativeAndroidTransport } from '../../transport/native-transport';
+import { BrowserWebSocketTransport } from '../../transport/browser-websocket';
+import { TVProfileStorage } from '../../storage/tv-store';
 
 async function safeParseJson(res: Response): Promise<any> {
   const text = await res.text();
@@ -48,6 +51,19 @@ function isCloudEnvironment(): boolean {
   return true;
 }
 
+function getEffectiveBridgeUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const configured = TVProfileStorage.getBridgeUrl();
+  if (configured) {
+    const base = configured.trim().replace(/\/+$/, '');
+    return base.endsWith('/api/tv/bridge') ? base : `${base}/api/tv/bridge`;
+  }
+  if (!isCloudEnvironment()) {
+    return '/api/tv/bridge';
+  }
+  return null;
+}
+
 export class LGWebOSTVAdapter implements ITVAdapter {
   public readonly brand = 'LG webOS';
   private ssapClient: SSAPClient;
@@ -59,13 +75,23 @@ export class LGWebOSTVAdapter implements ITVAdapter {
 
   constructor(transportFactory?: () => ITransportConnection) {
     this.hasCustomTransport = Boolean(transportFactory);
+
+    const defaultFactory = () => {
+      if (NativeAndroidTransport.isAvailable()) {
+        return new NativeAndroidTransport();
+      }
+      return new BrowserWebSocketTransport();
+    };
+
+    const effectiveFactory = transportFactory || defaultFactory;
+
     this.ssapClient = new SSAPClient({
-      transportFactory,
+      transportFactory: effectiveFactory,
       onStateChange: (state, message) => {
         this.notifyStateChange(state, message);
       },
     });
-    this.pointerClient = new PointerClient(transportFactory);
+    this.pointerClient = new PointerClient(effectiveFactory);
   }
 
   public onStateChange(listener: (state: ConnectionState, message?: string) => void): () => void {
@@ -92,16 +118,15 @@ export class LGWebOSTVAdapter implements ITVAdapter {
 
     const port = this.currentProfile.port || 3001;
     const pairingMode = preferredPairingType || profile.pairingType || 'PIN';
+    const bridgeUrl = getEffectiveBridgeUrl();
 
-    // In local environments (localhost or local server) without custom mock transport,
-    // attempt local bridge first to handle self-signed SSL on port 3001.
-    // If running in a cloud deployment (Vercel), skip bridge because cloud servers cannot reach home LAN IPs!
-    if (typeof window !== 'undefined' && !this.hasCustomTransport && !isCloudEnvironment()) {
+    // 1. If running with a local bridge (localhost or configured bridge service) without custom mock transport:
+    if (typeof window !== 'undefined' && !this.hasCustomTransport && bridgeUrl) {
       try {
         this.usingBridge = true;
-        this.notifyStateChange('connecting', `Connecting to ${profile.name || profile.ip}...`);
+        this.notifyStateChange('connecting', `Connecting to ${profile.name || profile.ip} via local bridge...`);
 
-        const bridgeRes = await fetch('/api/tv/bridge', {
+        const bridgeRes = await fetch(bridgeUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -135,14 +160,14 @@ export class LGWebOSTVAdapter implements ITVAdapter {
         }
 
         if (data.error) {
-          console.warn('Local bridge returned error, falling back to direct connection:', data.error);
+          console.warn('Local bridge returned error, falling back to direct client connection:', data.error);
         }
       } catch (bridgeErr) {
-        console.warn('Local bridge request failed, falling back to direct connection:', bridgeErr);
+        console.warn('Local bridge connection failed, falling back to direct client connection:', bridgeErr);
       }
     }
 
-    // Direct client-side transport (used for cloud deployments, browser direct mode, and native Android wrappers)
+    // 2. Direct client-side transport (used for cloud deployments, native Android wrappers, and browser direct mode)
     this.usingBridge = false;
     const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
     const protocol = isHttps ? 'wss' : (profile.useSecureWs ? 'wss' : 'ws');
@@ -182,12 +207,16 @@ export class LGWebOSTVAdapter implements ITVAdapter {
       return { success: true };
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Connection failed';
+      const errCode = err instanceof TransportError ? err.code : 'CONNECTION_FAILED';
+      const details = err instanceof TransportError ? err.info : undefined;
+
       this.notifyStateChange('error', errMsg);
       return {
         success: false,
         error: {
-          code: 'CONNECTION_FAILED',
+          code: errCode,
           message: errMsg,
+          details,
         },
       };
     }
@@ -199,9 +228,10 @@ export class LGWebOSTVAdapter implements ITVAdapter {
     }
 
     if (this.usingBridge) {
+      const bridgeUrl = getEffectiveBridgeUrl() || '/api/tv/bridge';
       try {
         this.notifyStateChange('connecting', 'Verifying PIN with TV...');
-        const res = await fetch('/api/tv/bridge', {
+        const res = await fetch(bridgeUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -260,17 +290,21 @@ export class LGWebOSTVAdapter implements ITVAdapter {
       return { success: true, clientKey: res.clientKey };
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Incorrect PIN entered. Check TV screen.';
+      const errCode = err instanceof TransportError ? err.code : 'INCORRECT_PIN';
+      const details = err instanceof TransportError ? err.info : undefined;
+
       this.notifyStateChange('pairing_pin', errMsg);
       return {
         success: false,
-        error: { code: 'PIN_VERIFICATION_FAILED', message: errMsg },
+        error: { code: errCode, message: errMsg, details },
       };
     }
   }
 
   private async callBridge(action: string, extra: Record<string, unknown> = {}): Promise<unknown> {
     if (!this.currentProfile) throw new Error('No active TV profile');
-    const res = await fetch('/api/tv/bridge', {
+    const bridgeUrl = getEffectiveBridgeUrl() || '/api/tv/bridge';
+    const res = await fetch(bridgeUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -299,8 +333,9 @@ export class LGWebOSTVAdapter implements ITVAdapter {
 
   public async forget(): Promise<void> {
     if (this.currentProfile) {
+      const bridgeUrl = getEffectiveBridgeUrl() || '/api/tv/bridge';
       try {
-        await fetch('/api/tv/bridge', {
+        await fetch(bridgeUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

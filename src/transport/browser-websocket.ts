@@ -1,4 +1,34 @@
-import { ITransportConnection, TransportType, TransportOptions, CloseEventDetails, TransportError } from './transport';
+import {
+  ITransportConnection,
+  TransportType,
+  TransportOptions,
+  CloseEventDetails,
+  TransportError,
+  TransportErrorCode,
+} from './transport';
+
+function isPrivateLanUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    return (
+      host.startsWith('192.168.') ||
+      host.startsWith('10.') ||
+      host.startsWith('172.16.') ||
+      host.startsWith('172.17.') ||
+      host.startsWith('172.18.') ||
+      host.startsWith('172.19.') ||
+      host.startsWith('172.2') ||
+      host.startsWith('172.30.') ||
+      host.startsWith('172.31.') ||
+      host.endsWith('.local') ||
+      host === 'localhost' ||
+      host === '127.0.0.1'
+    );
+  } catch {
+    return false;
+  }
+}
 
 export class BrowserWebSocketTransport implements ITransportConnection {
   public readonly transportType: TransportType = 'browser-websocket';
@@ -12,37 +42,46 @@ export class BrowserWebSocketTransport implements ITransportConnection {
       if (typeof window === 'undefined' || typeof WebSocket === 'undefined') {
         return reject(
           new TransportError(
-            'Browser WebSocket is only available in browser environments.',
-            'ENV_UNAVAILABLE'
+            'Browser WebSocket transport is only available in browser environments.',
+            'UNSUPPORTED_BROWSER_TRANSPORT'
           )
         );
       }
 
-      // Check for HTTPS mixed-content violation
       const isHttpsPage = window.location.protocol === 'https:';
-      const isPlainWsTarget = url.startsWith('ws://');
-      if (isHttpsPage && isPlainWsTarget) {
+      const isPlainWs = url.startsWith('ws://');
+      const isSecureWs = url.startsWith('wss://');
+      const isLanTarget = isPrivateLanUrl(url);
+
+      // 1. Detect W3C Mixed Content Violation upfront
+      if (isHttpsPage && isPlainWs) {
         return reject(
           new TransportError(
-            'Mixed Content Blocked: Browser cannot connect from an HTTPS origin to an insecure ws:// URL. Use wss:// or load the app over HTTP/localhost/PWA.',
+            `Mixed Content Blocked: Browser cannot connect from an HTTPS origin (${window.location.origin}) to an unencrypted WebSocket URL (${url}). Modern browsers require secure transport or native Android container.`,
             'MIXED_CONTENT_BLOCKED',
             undefined,
-            true
+            true,
+            {
+              title: 'Mixed Content Blocked',
+              technicalDetails:
+                'W3C Security Policy forbids insecure ws:// connections from secure https:// web origins. To connect to port 3000, run locally or use the native Android app.',
+            }
           )
         );
       }
 
-      // Clean up any existing connection
+      // Clean up previous socket if any
       if (this.ws) {
         try {
           this.ws.close();
         } catch {
-          // Ignore close errors during re-init
+          // ignore
         }
         this.ws = null;
       }
 
       const timeoutMs = options?.timeoutMs ?? 7000;
+      const startTime = Date.now();
       let connectionTimeoutId: ReturnType<typeof setTimeout> | null = null;
       let hasSettled = false;
 
@@ -60,8 +99,14 @@ export class BrowserWebSocketTransport implements ITransportConnection {
             }
             reject(
               new TransportError(
-                `Connection timeout after ${timeoutMs}ms while connecting to ${url}. Check TV IP address and network accessibility.`,
-                'CONNECTION_TIMEOUT'
+                `Connection timeout after ${timeoutMs}ms while connecting to ${url}. The TV did not respond. Check if the TV is powered on, Wi-Fi is connected, and the IP is correct.`,
+                'CONNECTION_TIMEOUT',
+                undefined,
+                false,
+                {
+                  title: 'TV Connection Timeout',
+                  technicalDetails: `TCP SYN sent to ${url} but received no response within ${timeoutMs}ms. Verify TV IP address and that TV is not in deep sleep mode.`,
+                }
               )
             );
           }
@@ -87,16 +132,35 @@ export class BrowserWebSocketTransport implements ITransportConnection {
         };
 
         socket.onerror = (event: Event) => {
-          const isSecurityBlock = isHttpsPage && (isPlainWsTarget || url.startsWith('wss://'));
-          const errorMsg = isHttpsPage
-            ? `Cannot connect to TV at ${url}. On HTTPS / deployed apps, browsers require authorizing the TV's self-signed certificate once. Click "Authorize TV in Browser" below.`
-            : `WebSocket encountered an error connecting to ${url}. Check if the TV is powered on, on the same Wi-Fi, and the port is accessible.`;
-          const error = new TransportError(
-            errorMsg,
-            isHttpsPage ? 'CERT_OR_LAN_BLOCKED' : 'SOCKET_ERROR',
-            event,
-            isSecurityBlock
-          );
+          const elapsed = Date.now() - startTime;
+
+          // Accurately classify the error
+          let code: TransportErrorCode = 'UNKNOWN';
+          let message: string;
+          let technical: string;
+          let isSecurityRestriction = false;
+
+          if (isHttpsPage && isSecureWs && isLanTarget && elapsed < 3000) {
+            // Rapid failure on HTTPS to private IP wss://3001 is the hallmark of
+            // browser self-signed TLS cert rejection or Private Network Access preflight block
+            code = 'CERT_AUTHORITY_INVALID';
+            isSecurityRestriction = true;
+            message = `Cannot connect to TV at ${url}. Web browsers on HTTPS require authorizing the TV's self-signed TLS certificate once, or using the native Android companion.`;
+            technical = `TLS handshake rejected by browser: ERR_CERT_AUTHORITY_INVALID. LG webOS TVs use an internal self-signed certificate on port 3001 which public HTTPS origins cannot validate automatically.`;
+          } else if (elapsed >= timeoutMs - 500) {
+            code = 'CONNECTION_TIMEOUT';
+            message = `Connection to ${url} timed out. Verify TV power and Wi-Fi connection.`;
+            technical = `Timed out after ${elapsed}ms waiting for WebSocket handshake to complete.`;
+          } else {
+            code = 'CONNECTION_REFUSED';
+            message = `WebSocket connection refused by TV at ${url}. Ensure the TV is powered on and LG Connect Apps is enabled in TV settings.`;
+            technical = `Handshake aborted after ${elapsed}ms. Port 3001 may be blocked by TV or router AP isolation.`;
+          }
+
+          const error = new TransportError(message, code, event, isSecurityRestriction, {
+            title: TransportError['getDefaultTitle'](code),
+            technicalDetails: technical,
+          });
 
           if (!hasSettled) {
             hasSettled = true;
@@ -123,11 +187,25 @@ export class BrowserWebSocketTransport implements ITransportConnection {
           if (!hasSettled) {
             hasSettled = true;
             if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
+
+            const elapsed = Date.now() - startTime;
+            let code: TransportErrorCode = 'HANDSHAKE_FAILED';
+            let message = `WebSocket closed during handshake (code: ${event.code}, reason: "${event.reason || 'None'}").`;
+
+            if (event.code === 1006 && isHttpsPage && isSecureWs && isLanTarget && elapsed < 3000) {
+              code = 'CERT_AUTHORITY_INVALID';
+              message = `Cannot connect to TV at ${url}. On deployed HTTPS apps, browsers block self-signed certificates on local devices. Tap "Authorize TV in Browser" or use the Native Android app.`;
+            }
+
             reject(
               new TransportError(
-                `Connection closed during handshake (code: ${event.code}, reason: "${event.reason || 'None'}").`,
-                'HANDSHAKE_FAILED',
-                event
+                message,
+                code,
+                event,
+                code === 'CERT_AUTHORITY_INVALID',
+                {
+                  technicalDetails: `WebSocket CloseEvent code=${event.code}, wasClean=${event.wasClean}, elapsed=${elapsed}ms`,
+                }
               )
             );
           }
@@ -214,4 +292,3 @@ export class BrowserWebSocketTransport implements ITransportConnection {
     return () => this.errorListeners.delete(handler);
   }
 }
-

@@ -9,9 +9,15 @@ import {
   ChevronDown,
   ExternalLink,
   ShieldCheck,
+  Smartphone,
+  Server,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useTV } from '../../src/hooks/use-tv';
 import { TVProfile } from '../../src/integrations/tv/types';
+import { TransportErrorInfo } from '../../src/transport/transport';
+import { TVProfileStorage } from '../../src/storage/tv-store';
 
 interface ManualIpEntryProps {
   onSuccess?: () => void;
@@ -32,13 +38,24 @@ export const ManualIpEntry: React.FC<ManualIpEntryProps> = ({ onSuccess, onPairi
   const [isScanning, setIsScanning] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showCertHelp, setShowCertHelp] = useState(false);
+  const [errorInfo, setErrorInfo] = useState<TransportErrorInfo | null>(null);
+  const [activeFallbackTab, setActiveFallbackTab] = useState<'android' | 'bridge' | 'browser'>('android');
+  const [copiedCmd, setCopiedCmd] = useState(false);
 
   // Manual IP toggle
   const [showManualIp, setShowManualIp] = useState(false);
   const [manualIp, setManualIp] = useState('192.168.1.10');
 
+  // Local bridge configuration
+  const [bridgeUrl, setBridgeUrl] = useState('');
+  const [isTestingBridge, setIsTestingBridge] = useState(false);
+  const [bridgeStatus, setBridgeStatus] = useState<string | null>(null);
+
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+
+  useEffect(() => {
+    setBridgeUrl(TVProfileStorage.getBridgeUrl());
+  }, []);
 
   // Auto-scan Wi-Fi on mount
   useEffect(() => {
@@ -68,6 +85,7 @@ export const ManualIpEntry: React.FC<ManualIpEntryProps> = ({ onSuccess, onPairi
   const handleStartPairing = async (ipToUse: string, nameToUse: string) => {
     setIsConnecting(true);
     setErrorMsg(null);
+    setErrorInfo(null);
 
     const profile: TVProfile = {
       id: `tv-${ipToUse}`,
@@ -86,11 +104,12 @@ export const ManualIpEntry: React.FC<ManualIpEntryProps> = ({ onSuccess, onPairi
         onPairingNeeded?.();
       } else {
         setErrorMsg(res.error || 'Could not connect to TV.');
-        if (isHttps) setShowCertHelp(true);
+        if (res.errorInfo) {
+          setErrorInfo(res.errorInfo);
+        }
       }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Could not connect to TV.');
-      if (isHttps) setShowCertHelp(true);
     } finally {
       setIsConnecting(false);
     }
@@ -102,8 +121,34 @@ export const ManualIpEntry: React.FC<ManualIpEntryProps> = ({ onSuccess, onPairi
     handleStartPairing(manualIp.trim(), 'LG Smart TV');
   };
 
+  const handleCopyBridgeCmd = () => {
+    navigator.clipboard.writeText('npm run bridge');
+    setCopiedCmd(true);
+    setTimeout(() => setCopiedCmd(false), 2500);
+  };
+
+  const handleTestBridge = async () => {
+    setIsTestingBridge(true);
+    setBridgeStatus(null);
+    const testUrl = (bridgeUrl.trim() || 'http://localhost:3005').replace(/\/+$/, '') + '/health';
+    try {
+      const res = await fetch(testUrl, { method: 'GET' });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        setBridgeStatus('Bridge connected successfully!');
+        TVProfileStorage.setBridgeUrl(bridgeUrl.trim() || 'http://localhost:3005');
+      } else {
+        setBridgeStatus('Bridge returned unexpected response.');
+      }
+    } catch (err) {
+      setBridgeStatus('Could not reach bridge server. Ensure "npm run bridge" is running.');
+    } finally {
+      setIsTestingBridge(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col items-center gap-5 w-full max-w-sm px-4 select-none animate-fadeIn">
+    <div className="flex flex-col items-center gap-5 w-full max-w-sm px-4 select-none animate-fadeIn pb-8">
       {/* Header Icon */}
       <div className="flex flex-col items-center text-center gap-2 mt-2">
         <div className="w-16 h-16 rounded-3xl bg-[#191A15] border border-[#2A2C23] shadow-card flex items-center justify-center relative">
@@ -113,9 +158,7 @@ export const ManualIpEntry: React.FC<ManualIpEntryProps> = ({ onSuccess, onPairi
 
         <div className="flex flex-col gap-0.5">
           <h2 className="text-xl font-bold text-[#F1EEE3] tracking-tight">Connect to LG TV</h2>
-          <p className="text-xs text-[#A8A69A]">
-            Select your TV on the local Wi-Fi network
-          </p>
+          <p className="text-xs text-[#A8A69A]">Select your TV on the local Wi-Fi network</p>
         </div>
       </div>
 
@@ -167,46 +210,165 @@ export const ManualIpEntry: React.FC<ManualIpEntryProps> = ({ onSuccess, onPairi
         <div className="bg-[#12130F] border border-[#25261F] rounded-2xl p-3 flex items-start gap-2.5 text-xs text-[#A8A69A]">
           <Sparkles className="w-4 h-4 text-[#B6AD83] shrink-0 mt-0.5" />
           <p className="leading-relaxed">
-            Tap below to send a pairing request. An <strong className="text-[#F1EEE3]">8-digit code will appear on your TV</strong> screen.
+            Tap below to connect. An <strong className="text-[#F1EEE3]">8-digit pairing code</strong> will appear on your TV screen.
           </p>
         </div>
 
-        {/* Error message */}
+        {/* Diagnostic Error Banner with Detailed Context */}
         {errorMsg && (
-          <div className="p-3 rounded-2xl bg-[#C95D53]/15 border border-[#C95D53]/30 text-[#C95D53] text-xs flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-[#C95D53]" />
-            <span>{errorMsg}</span>
+          <div className="p-3.5 rounded-2xl bg-[#C95D53]/15 border border-[#C95D53]/30 text-xs flex flex-col gap-1.5 text-left animate-fadeIn">
+            <div className="flex items-center gap-2 text-[#C95D53] font-bold">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-[#C95D53]" />
+              <span>{errorInfo?.title || 'Connection Failed'}</span>
+            </div>
+            <p className="text-[11px] text-[#E0A09B] leading-relaxed">{errorMsg}</p>
+            {errorInfo?.technicalDetails && (
+              <span className="text-[10px] text-[#A8A69A] font-mono bg-[#12130F] p-2 rounded-xl mt-1 break-words">
+                {errorInfo.technicalDetails}
+              </span>
+            )}
           </div>
         )}
 
-        {/* 1-Click Browser TV Certificate Authorization for Deployed HTTPS apps */}
-        {(showCertHelp || isHttps) && (
-          <div className="bg-[#25261F]/70 border border-[#36382E] rounded-2xl p-3 flex flex-col gap-2.5 text-left animate-fadeIn">
-            <div className="flex items-start gap-2">
-              <ShieldCheck className="w-4 h-4 text-[#B6AD83] shrink-0 mt-0.5" />
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-[#F1EEE3]">First-Time Browser Authorization</span>
-                <p className="text-[11px] text-[#A8A69A] mt-0.5 leading-relaxed">
-                  LG TVs use a local self-signed certificate on port 3001. Allow it once in your browser:
-                </p>
-              </div>
+        {/* Architecture Diagnostics & Reliable Fallback Selector */}
+        {(errorMsg || isHttps) && (
+          <div className="bg-[#12130F] border border-[#25261F] rounded-2xl p-3.5 flex flex-col gap-3 text-left animate-fadeIn">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs font-bold text-[#F1EEE3] flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-[#B6AD83]" />
+                Browser LAN Restrictions &amp; Solutions
+              </span>
+              <p className="text-[11px] text-[#A8A69A] leading-relaxed">
+                Browsers on public HTTPS (Vercel) block direct LAN WebSockets due to self-signed TLS certificates (ERR_CERT_AUTHORITY_INVALID). Choose a reliable option:
+              </p>
             </div>
 
-            <ol className="list-decimal list-inside space-y-1 text-[#737267] text-[10px] pl-1">
-              <li>Tap <strong>Authorize TV</strong> below (opens new tab)</li>
-              <li>Tap <strong>&ldquo;Advanced&rdquo;</strong> &rarr; <strong>&ldquo;Proceed to {selectedDevice.ip} (unsafe)&rdquo;</strong></li>
-              <li>Return here and tap <strong>&ldquo;Connect &amp; Show Code on TV&rdquo;</strong></li>
-            </ol>
+            {/* Transport Fallback Tabs */}
+            <div className="grid grid-cols-3 gap-1 p-1 bg-[#191A15] border border-[#2A2C23] rounded-xl text-[11px]">
+              <button
+                type="button"
+                onClick={() => setActiveFallbackTab('android')}
+                className={`py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
+                  activeFallbackTab === 'android'
+                    ? 'bg-[#B6AD83] text-[#10110E] font-bold shadow-sm'
+                    : 'text-[#A8A69A] hover:text-[#F1EEE3]'
+                }`}
+              >
+                1. Android App
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveFallbackTab('bridge')}
+                className={`py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
+                  activeFallbackTab === 'bridge'
+                    ? 'bg-[#B6AD83] text-[#10110E] font-bold shadow-sm'
+                    : 'text-[#A8A69A] hover:text-[#F1EEE3]'
+                }`}
+              >
+                2. Local Bridge
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveFallbackTab('browser')}
+                className={`py-1.5 rounded-lg font-medium transition-colors cursor-pointer ${
+                  activeFallbackTab === 'browser'
+                    ? 'bg-[#B6AD83] text-[#10110E] font-bold shadow-sm'
+                    : 'text-[#A8A69A] hover:text-[#F1EEE3]'
+                }`}
+              >
+                3. Browser Auth
+              </button>
+            </div>
 
-            <a
-              href={`https://${selectedDevice.ip}:3001`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full h-10 rounded-xl bg-[#191A15] hover:bg-[#20221B] border border-[#B6AD83]/30 text-[#D5CBA8] font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-[#B6AD83]" />
-              <span>Authorize TV in Browser (Tap to Allow)</span>
-            </a>
+            {/* TAB 1: Native Android (Capacitor) */}
+            {activeFallbackTab === 'android' && (
+              <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-[#191A15] border border-[#2A2C23] text-xs">
+                <div className="flex items-start gap-2">
+                  <Smartphone className="w-4 h-4 text-[#8F9E6D] shrink-0 mt-0.5" />
+                  <div className="flex flex-col gap-1">
+                    <span className="font-bold text-[#F1EEE3]">Native Android Companion (Recommended)</span>
+                    <p className="text-[11px] text-[#A8A69A] leading-relaxed">
+                      Runs via native Android networking. Bypasses browser self-signed SSL restrictions completely with 100% reliable TV pairing.
+                    </p>
+                  </div>
+                </div>
+                <div className="text-[10px] text-[#737267] font-mono bg-[#12130F] p-2 rounded-lg">
+                  Run: npx cap sync android &amp;&amp; npx cap open android
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: Local Bridge Runner */}
+            {activeFallbackTab === 'bridge' && (
+              <div className="flex flex-col gap-2.5 p-2.5 rounded-xl bg-[#191A15] border border-[#2A2C23] text-xs">
+                <div className="flex items-start gap-2">
+                  <Server className="w-4 h-4 text-[#B6AD83] shrink-0 mt-0.5" />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-bold text-[#F1EEE3]">Local Bridge Service</span>
+                    <p className="text-[11px] text-[#A8A69A] leading-relaxed">
+                      Run this on any laptop/computer on the same Wi-Fi. It bridges your TV commands securely:
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between bg-[#12130F] px-3 py-2 rounded-xl border border-[#25261F]">
+                  <code className="text-[#D5CBA8] font-mono text-[11px]">npm run bridge</code>
+                  <button
+                    type="button"
+                    onClick={handleCopyBridgeCmd}
+                    className="flex items-center gap-1 text-[10px] text-[#B6AD83] hover:text-[#F1EEE3] cursor-pointer"
+                  >
+                    {copiedCmd ? <Check className="w-3.5 h-3.5 text-[#8F9E6D]" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCmd ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+
+                <div className="flex gap-1.5 items-center mt-1">
+                  <input
+                    type="text"
+                    value={bridgeUrl}
+                    onChange={(e) => setBridgeUrl(e.target.value)}
+                    placeholder="http://localhost:3005"
+                    className="flex-1 h-9 px-2.5 rounded-xl bg-[#12130F] border border-[#25261F] text-[#F1EEE3] text-xs font-mono focus:outline-none focus:border-[#B6AD83]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTestBridge}
+                    disabled={isTestingBridge}
+                    className="h-9 px-3 rounded-xl bg-[#25261F] hover:bg-[#2F3127] border border-[#36382E] text-xs text-[#F1EEE3] font-medium cursor-pointer"
+                  >
+                    {isTestingBridge ? 'Testing...' : 'Set Bridge'}
+                  </button>
+                </div>
+
+                {bridgeStatus && (
+                  <span className="text-[10px] text-[#D5CBA8] mt-0.5">{bridgeStatus}</span>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: Browser Certificate Exception */}
+            {activeFallbackTab === 'browser' && (
+              <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-[#191A15] border border-[#2A2C23] text-xs">
+                <p className="text-[11px] text-[#A8A69A] leading-relaxed">
+                  To use direct browser mode on HTTPS, allow the TV&apos;s self-signed TLS cert once:
+                </p>
+                <ol className="list-decimal list-inside space-y-1 text-[#737267] text-[10px] pl-1">
+                  <li>Tap <strong>Authorize TV</strong> below (opens new tab)</li>
+                  <li>Tap <strong>Advanced</strong> &rarr; <strong>Proceed to {selectedDevice.ip} (unsafe)</strong></li>
+                  <li>Return here and tap <strong>Connect Remote</strong></li>
+                </ol>
+                <a
+                  href={`https://${selectedDevice.ip}:3001`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 h-9 rounded-xl bg-[#25261F] hover:bg-[#2F3127] border border-[#B6AD83]/30 text-[#D5CBA8] text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-[#B6AD83]" />
+                  <span>Authorize TV in Browser (Tap to Allow)</span>
+                </a>
+              </div>
+            )}
           </div>
         )}
 

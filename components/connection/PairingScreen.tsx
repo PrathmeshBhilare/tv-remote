@@ -10,6 +10,8 @@ import {
   RotateCw,
   ExternalLink,
   ShieldCheck,
+  Server,
+  Smartphone,
 } from 'lucide-react';
 import { useTV } from '../../src/hooks/use-tv';
 
@@ -57,7 +59,7 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ onBack, onSuccess 
       if (ok) {
         onSuccess();
       } else {
-        setErrorMessage('Incorrect code. Please verify the code on your TV screen and try again.');
+        setErrorMessage('Incorrect code. Please verify the 8-digit code on your TV screen.');
       }
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'PIN submission failed.');
@@ -232,13 +234,18 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ onBack, onSuccess 
               {showCertHelp && (
                 <div className="flex flex-col gap-2 pt-1 text-[11px] text-[#A8A69A]">
                   <p className="leading-relaxed">
-                    On deployed web apps, your browser must authorize the TV&apos;s self-signed security certificate once:
+                    On deployed web apps, your browser blocks self-signed TLS certificates on local devices. Use either:
                   </p>
-                  <ol className="list-decimal list-inside space-y-1 text-[#737267] text-[10px] pl-1">
-                    <li>Tap <strong>Authorize TV</strong> below (opens new tab)</li>
-                    <li>Tap <strong>&ldquo;Advanced&rdquo;</strong> &rarr; <strong>&ldquo;Proceed to {currentProfile?.ip || '192.168.1.10'} (unsafe)&rdquo;</strong></li>
-                    <li>Return here and tap <strong>&ldquo;Resend code to TV&rdquo;</strong></li>
-                  </ol>
+                  <div className="flex flex-col gap-1.5 text-[10px] text-[#737267]">
+                    <div className="flex items-center gap-1.5 text-[#D5CBA8]">
+                      <Smartphone className="w-3.5 h-3.5 text-[#8F9E6D]" />
+                      <span><strong>Android Native App:</strong> Bypasses SSL blocks completely.</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[#D5CBA8]">
+                      <Server className="w-3.5 h-3.5 text-[#B6AD83]" />
+                      <span><strong>Local Bridge:</strong> Run &ldquo;npm run bridge&rdquo; on local Wi-Fi.</span>
+                    </div>
+                  </div>
                   <a
                     href={`https://${currentProfile?.ip || '192.168.1.10'}:3001`}
                     target="_blank"

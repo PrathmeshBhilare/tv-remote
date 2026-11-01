@@ -14,6 +14,7 @@ import {
 import { ITVAdapter } from '../integrations/tv/adapter';
 import { tvRegistry } from '../integrations/tv/registry';
 import { TVProfileStorage } from '../storage/tv-store';
+import { TransportErrorInfo } from '../transport/transport';
 
 interface TVContextValue {
   connectionState: ConnectionState;
@@ -30,7 +31,13 @@ interface TVContextValue {
   connectTV: (
     profile: TVProfile,
     pairingType?: 'PROMPT' | 'PIN'
-  ) => Promise<{ success: boolean; requiresPin?: boolean; requiresPrompt?: boolean; error?: string }>;
+  ) => Promise<{
+    success: boolean;
+    requiresPin?: boolean;
+    requiresPrompt?: boolean;
+    error?: string;
+    errorInfo?: TransportErrorInfo;
+  }>;
   submitPairingPin: (pin: string) => Promise<boolean>;
   disconnectTV: () => Promise<void>;
   forgetCurrentTV: () => Promise<void>;
@@ -208,7 +215,13 @@ export function TVProvider({ children }: { children: React.ReactNode }) {
     async (
       profile: TVProfile,
       pairingType?: 'PROMPT' | 'PIN'
-    ): Promise<{ success: boolean; requiresPin?: boolean; requiresPrompt?: boolean; error?: string }> => {
+    ): Promise<{
+      success: boolean;
+      requiresPin?: boolean;
+      requiresPrompt?: boolean;
+      error?: string;
+      errorInfo?: TransportErrorInfo;
+    }> => {
       if (!adapterRef.current) return { success: false, error: 'TV adapter not initialized.' };
       setCurrentProfile(profile);
       showFeedback(`Connecting to ${profile.name || profile.ip}...`);
@@ -239,7 +252,11 @@ export function TVProvider({ children }: { children: React.ReactNode }) {
       } else {
         const errMsg = res.error?.message || 'Connection failed';
         showFeedback(errMsg, true);
-        return { success: false, error: errMsg };
+        return {
+          success: false,
+          error: errMsg,
+          errorInfo: res.error?.details as TransportErrorInfo | undefined,
+        };
       }
     },
     [showFeedback, refreshTVStatus, runPostPairingSelfTest]
