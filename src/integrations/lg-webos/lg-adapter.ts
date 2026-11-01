@@ -120,8 +120,8 @@ export class LGWebOSTVAdapter implements ITVAdapter {
     const pairingMode = preferredPairingType || profile.pairingType || 'PIN';
     const bridgeUrl = getEffectiveBridgeUrl();
 
-    // 1. If running with a local bridge (localhost or configured bridge service) without custom mock transport:
-    if (typeof window !== 'undefined' && !this.hasCustomTransport && bridgeUrl) {
+    // 1. If running with a local bridge (localhost or configured bridge service) without custom mock transport and NOT in native Android shell:
+    if (typeof window !== 'undefined' && !this.hasCustomTransport && !NativeAndroidTransport.isAvailable() && bridgeUrl) {
       try {
         this.usingBridge = true;
         this.notifyStateChange('connecting', `Connecting to ${profile.name || profile.ip} via local bridge...`);
