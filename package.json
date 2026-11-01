@@ -9,7 +9,7 @@
     "lint": "next lint",
     "test": "tsx --test tests/**/*.test.ts",
     "bridge": "node scripts/bridge.js",
-    "cap:sync": "cap sync",
+    "cap:sync": "cap sync android",
     "cap:android": "cap open android"
   },
   "dependencies": {
