@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Matte Charcoal Surface Gradient -->
+    <linearGradient id="charcoalBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1A1B16" />
+      <stop offset="60%" stop-color="#12130F" />
+      <stop offset="100%" stop-color="#0E0F0C" />
+    </linearGradient>
+
+    <!-- Warm Olive / Champagne Accent Gradient -->
+    <linearGradient id="oliveChampagne" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E8E2D0" />
+      <stop offset="50%" stop-color="#D5CBA8" />
+      <stop offset="100%" stop-color="#B6AD83" />
+    </linearGradient>
+
+    <!-- Deep Graphite Screen Fill -->
+    <linearGradient id="screenFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#191A15" />
+      <stop offset="100%" stop-color="#10110E" />
+    </linearGradient>
+
+    <!-- D-Pad Radial -->
+    <radialGradient id="dpadFill" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2D2F26" />
+      <stop offset="70%" stop-color="#22231C" />
+      <stop offset="100%" stop-color="#171813" />
+    </radialGradient>
+
+    <!-- Outer Rim Subtle Gold Border -->
+    <linearGradient id="goldBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D5CBA8" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#B6AD83" stop-opacity="0.1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle Base Canvas -->
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#charcoalBg)" stroke="url(#goldBorder)" stroke-width="3" />
+
+  <!-- Inner Soft Bevel Glow -->
+  <rect x="14" y="14" width="484" height="484" rx="106" fill="none" stroke="rgba(241, 238, 227, 0.04)" stroke-width="2" />
+
+  <!-- 1. WIRELESS SIGNAL WAVES (Top Center) -->
+  <g transform="translate(256, 116)" stroke="url(#oliveChampagne)" fill="none" stroke-linecap="round">
+    <!-- Outer Wave -->
+    <path d="M -54 -12 A 56 56 0 0 1 54 -12" stroke-width="4.5" opacity="0.6" />
+    <!-- Middle Wave -->
+    <path d="M -34 4 A 36 36 0 0 1 34 4" stroke-width="5" opacity="0.85" />
+    <!-- Inner Dot / Origin -->
+    <circle cx="0" cy="18" r="4.5" fill="#D5CBA8" stroke="none" />
+  </g>
+
+  <!-- 2. MINIMAL TELEVISION OUTLINE -->
+  <g transform="translate(106, 150)">
+    <!-- TV Outer Frame (300 wide x 210 high) -->
+    <rect x="0" y="0" width="300" height="210" rx="20" fill="url(#screenFill)" stroke="#F1EEE3" stroke-width="6.5" stroke-opacity="0.9" />
+
+    <!-- TV Stand (Subtle architectural minimal base) -->
+    <path d="M 120 214 L 105 240 L 195 240 L 180 214 Z" fill="#25261F" stroke="#B6AD83" stroke-width="2.5" stroke-opacity="0.6" stroke-linejoin="round" />
+    <line x1="88" y1="240" x2="212" y2="240" stroke="#D5CBA8" stroke-width="3.5" stroke-linecap="round" stroke-opacity="0.8" />
+
+    <!-- 3. INTEGRATED REMOTE CONTROLLER / D-PAD (Inside TV Screen) -->
+    <g transform="translate(150, 105)">
+      <!-- Directional Controller Outer Ring -->
+      <circle cx="0" cy="0" r="62" fill="url(#dpadFill)" stroke="#B6AD83" stroke-width="2.5" stroke-opacity="0.5" />
+
+      <!-- Directional Indicator Chevrons -->
+      <!-- Up -->
+      <path d="M -7 -38 L 0 -45 L 7 -38" fill="none" stroke="#D5CBA8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+      <!-- Down -->
+      <path d="M -7 38 L 0 45 L 7 38" fill="none" stroke="#D5CBA8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+      <!-- Left -->
+      <path d="M -38 -7 L -45 0 L -38 7" fill="none" stroke="#D5CBA8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+      <!-- Right -->
+      <path d="M 38 -7 L 45 0 L 38 7" fill="none" stroke="#D5CBA8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+
+      <!-- Center OK Button -->
+      <circle cx="0" cy="0" r="22" fill="#141511" stroke="#D5CBA8" stroke-width="2" />
+      <circle cx="0" cy="0" r="5" fill="#D5CBA8" />
+    </g>
+  </g>
+</svg>

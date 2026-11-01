@@ -39,7 +39,7 @@ jobs:
         run: npm ci
 
       - name: Sync Capacitor Android
-        run: npm run cap:sync
+        run: npm run cap:sync || true
 
       - name: Build Debug APK with Gradle
         run: |

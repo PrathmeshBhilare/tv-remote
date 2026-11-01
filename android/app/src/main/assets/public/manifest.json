@@ -1,0 +1,39 @@
+{
+  "name": "LG Control",
+  "short_name": "LG Control",
+  "description": "Smart TV Remote for LG webOS TVs",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#10110E",
+  "theme_color": "#10110E",
+  "orientation": "portrait",
+  "scope": "/",
+  "id": "/",
+  "categories": ["utilities", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
