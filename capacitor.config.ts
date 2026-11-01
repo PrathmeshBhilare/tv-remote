@@ -3,12 +3,12 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.lgcontrol.remote',
   appName: 'LG Control',
-  webDir: 'out',
+  webDir: 'public',
   server: {
-    // Android runs locally on https://localhost
-    androidScheme: 'https',
+    url: 'https://tv-remote-roan.vercel.app',
     cleartext: true,
     allowNavigation: [
+      'tv-remote-roan.vercel.app',
       '192.168.*',
       '10.*',
       '172.16.*',

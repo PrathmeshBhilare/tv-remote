@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LG Control</string>
+    <string name="title_activity_main">LG Control</string>
+    <string name="package_name">com.lgcontrol.remote</string>
+    <string name="custom_url_scheme">com.lgcontrol.remote</string>
+</resources>

@@ -92,3 +92,20 @@ Tested and verified against physical LG webOS Smart TV (`192.168.1.10:3001`):
 - **YouTube App Launch:** 1-tap launch of native YouTube leanback TV application.
 - **YouTube Text Typing:** Direct text insertion into TV search box without browser redirects (`ssap://com.webos.service.ime/insertText`).
 - **Media Playback:** Play, Pause, Rewind, Fast Forward, and Stop.
+
+---
+
+## 6. Standalone Android App (APK) — No Computer / Laptop Needed
+
+If you want to operate your LG TV directly from your mobile phone with your laptop **completely closed or turned off**:
+
+1. **Download the APK:**
+   - Go to the GitHub repository's **Releases** or **Actions** tab.
+   - Download the latest **`LG-Control.apk`**.
+2. **Install on Your Phone:**
+   - Open the downloaded `.apk` file on your Android phone and tap **Install** (allow "Install from unknown sources" if prompted).
+3. **Control Your TV:**
+   - Ensure your phone is connected to the same Wi-Fi as your LG TV.
+   - Open **LG Control** on your phone.
+   - Enter your TV IP (`192.168.1.10`) and tap **Connect**.
+   - Your phone uses its native OkHttp WebSocket bridge to connect directly to the TV over Wi-Fi — zero bridge and zero laptop needed!
